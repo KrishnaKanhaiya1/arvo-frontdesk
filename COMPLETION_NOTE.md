@@ -16,21 +16,26 @@ All functional rules embedded in Section 3 (Meeting Notes) and Section 4 (Incide
    * Excludes weekends and Indian festival holidays.
    * Proved that tickets arriving Friday at 18:00 IST only accrue 30 working minutes before weekend closure and remain well within SLA on Sunday morning.
 
-2. **Incident Solutions (Engineered at Data & Protocol Level):**
-   * **INC-0291 (Double Claim Race Condition):** Implemented database transactions with optimistic concurrency control (`version` integer checking). Concurrent claim attempts result in a `409 Conflict` (`VERSION_MISMATCH` / `ALREADY_CLAIMED`), immediately notifying the second agent and syncing state.
-   * **INC-0304 (Note Leak Prevention):** Isolated private notes into a separate `internal_notes` database table with dedicated agent-only endpoints. The customer endpoints (`/api/customer/*`) have no join or reference to this table, guaranteeing zero leakage in network payloads. The UI provides a "Poka-Yoke" dual-mode composer with an amber warning state.
-   * **INC-0318 (Audit Trail):** Created an immutable, append-only `audit_log` table with millisecond-precision IST timestamps and structured metadata diffs. No `PUT`, `PATCH`, or `DELETE` endpoints exist.
+2. **Incident Solutions (Engineered at Data, Trigger & Protocol Levels):**
+   * **INC-0291 (Double Claim Race Condition):** Implemented database transactions with Atomic Compare-And-Swap (CAS) optimistic concurrency control (`updateMany({ where: { id, version }, data: { ... version: { increment: 1 } } })`). Concurrent claim attempts result in a deterministic `409 Conflict` (`VERSION_MISMATCH` / `CONFLICT`), verified by automated concurrency tests.
+   * **INC-0304 (Note Leak Prevention & Authorization):** Isolated private notes into a separate `internal_notes` database table protected by `requireAgentRole` authorization middleware. Customer endpoints (`/api/customer/*`) have no join or reference to this table, guaranteeing zero leakage in network payloads. Direct requests by customer personas receive `403 Forbidden`. The UI provides a "Poka-Yoke" dual-mode composer with an amber warning state.
+   * **INC-0318 (Audit Trail & Database-Level Immutability):** Created an append-only `audit_log` table with millisecond-precision IST timestamps. Immutability is enforced directly at the database engine level using a native PostgreSQL trigger (`prevent_audit_log_modification`) that raises an exception on any direct `UPDATE` or `DELETE` attempt, verified by automated unit tests.
 
-3. **Mid-Flight Priority Recalculation:**
+3. **Mid-Flight Priority Recalculation & Critical Same-Day Resolution:**
    * When priority changes mid-resolution, elapsed business minutes are preserved, and new SLA targets are applied against the remaining window.
+   * For Critical priority tickets, resolution deadline calculations enforce same-working-day resolution (18:30 IST), rather than an unconstrained 9-hour rollover.
 
 4. **Inactivity Auto-Close & Reopen Policy:**
-   * Auto-closes tickets after 5 working days (2,700 business minutes) of waiting on a customer.
-   * Enforces a 5-working-day customer reopen limit, transitioning expired tickets into linked follow-up tickets.
+   * Auto-closes tickets after 5 working days (2,700 business minutes) of waiting on a customer using an atomic CAS sweep to prevent racing with customer replies.
+   * Enforces a 5-working-day customer reopen limit. Beyond 5 working days, reopening is rejected with `REOPEN_EXPIRED` (`422 Unprocessable Entity`), and the customer UI offers a complete 1-click modal workflow to create a linked follow-up ticket.
 
 5. **Demo Simulation Clock & Free-Tier Resilience:**
-   * Exposed `/api/system/clock` and `/api/system/run-autoclose` to allow evaluators to test time-travel scenarios (weekend arrival, holiday skipping, 6-day auto-close sweep).
+   * Exposed `/api/system/clock` and `/api/system/run-autoclose` (guarded by `requireLeadRole`) to allow evaluators to test time-travel scenarios (weekend arrival, holiday skipping, 6-day auto-close sweep).
    * Implemented a branded cold-start wake-up screen with automatic query retry to handle Render free-tier spin-up latency smoothly.
+
+6. **Comprehensive Automated Test Suite (32 Passing Tests):**
+   * 23 SLA unit tests validating business hour boundaries, weekend exclusions, 2026 Indian holidays, Friday 18:00 to Sunday morning invariants, and same-day critical resolution deadlines.
+   * 9 full integration tests verifying INC-0291 atomic CAS concurrency (simultaneous claims returning 409), INC-0304 private note security (403 Forbidden for unauthorized roles), INC-0318 database trigger immutability, customer reopen window expiration, and closed ticket reply protections. All 32 tests pass.
 
 ---
 

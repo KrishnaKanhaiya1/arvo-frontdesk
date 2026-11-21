@@ -28,6 +28,12 @@ async function loadHolidays(): Promise<Date[]> {
 function formatCustomerTicket(ticket: any, currentTime: Date, holidays: Date[], includeMessages = false) {
   const sla = computeSLAState(ticket, currentTime, holidays);
 
+  const bizMinsSinceResolved = ticket.resolvedAt
+    ? calculateBusinessMinutesBetween(ticket.resolvedAt, currentTime, holidays)
+    : 0;
+  const canReopen = ticket.status === 'RESOLVED' && bizMinsSinceResolved <= REOPEN_WINDOW_MINUTES;
+  const reopenWindowExpired = ticket.status === 'CLOSED' || (ticket.status === 'RESOLVED' && bizMinsSinceResolved > REOPEN_WINDOW_MINUTES);
+
   const base = {
     id: ticket.id,
     ticketKey: ticket.ticketKey,
@@ -41,6 +47,8 @@ function formatCustomerTicket(ticket: any, currentTime: Date, holidays: Date[], 
     assigneeName: ticket.assignee?.name ?? null,
     sla,
     hasInternalNotes: false, // NEVER expose to customers
+    canReopen,
+    reopenWindowExpired,
     createdAt: ticket.createdAt.toISOString(),
     updatedAt: ticket.updatedAt.toISOString(),
     version: ticket.version,
@@ -162,6 +170,7 @@ router.get('/tickets/:key/audit', async (req: Request, res: Response, next: Next
 const CustomerReplySchema = z.object({
   customerId: z.string().min(1),
   content: z.string().min(1),
+  reopen: z.boolean().optional(),
 });
 
 router.post('/tickets/:key/reply', async (req: Request, res: Response, next: NextFunction) => {
@@ -176,6 +185,9 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
       if (ticket.customerId !== body.customerId) {
         throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Not your ticket.');
       }
+      if (ticket.status === 'CLOSED') {
+        throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'This ticket is closed. Please create a new ticket.');
+      }
 
       const customer = await tx.customer.findUnique({ where: { id: body.customerId } });
       if (!customer) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Customer not found');
@@ -184,8 +196,38 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
         version: { increment: 1 },
       };
 
-      // If WAITING_ON_CUSTOMER → resume SLA
-      if (ticket.status === 'WAITING_ON_CUSTOMER') {
+      let isReopening = false;
+      let bizMinsSinceResolved = 0;
+
+      // Handle Reopening if resolved or requested
+      if (ticket.status === 'RESOLVED' || body.reopen) {
+        if (!ticket.resolvedAt) {
+          throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Ticket has no resolution timestamp.');
+        }
+
+        bizMinsSinceResolved = calculateBusinessMinutesBetween(
+          ticket.resolvedAt,
+          currentTime,
+          holidays,
+        );
+
+        if (bizMinsSinceResolved > REOPEN_WINDOW_MINUTES) {
+          throw new AppError(
+            422,
+            ERROR_CODES.REOPEN_EXPIRED,
+            'Reopen window has expired (5 working days). Please create a new ticket.',
+            { canCreateLinkedTicket: true, originalTicketKey: ticket.ticketKey }
+          );
+        }
+
+        isReopening = true;
+        updateData.status = ticket.assigneeId ? 'ASSIGNED' : 'OPEN';
+        updateData.resolvedAt = null;
+        updateData.slaResolutionMet = false;
+        updateData.slaResolutionMetAt = null;
+        updateData.slaLastTickAt = currentTime;
+      } else if (ticket.status === 'WAITING_ON_CUSTOMER') {
+        // If WAITING_ON_CUSTOMER → resume SLA
         const pausedMins = ticket.waitingOnCustomerSince
           ? calculateBusinessMinutesBetween(ticket.waitingOnCustomerSince, currentTime, holidays)
           : 0;
@@ -196,9 +238,21 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
         updateData.slaLastTickAt = currentTime;
       }
 
-      const updated = await tx.ticket.update({
-        where: { id: ticket.id },
+      // Atomic Compare-And-Swap update
+      const updateRes = await tx.ticket.updateMany({
+        where: {
+          id: ticket.id,
+          version: ticket.version,
+        },
         data: updateData,
+      });
+
+      if (updateRes.count !== 1) {
+        throw new AppError(409, ERROR_CODES.VERSION_MISMATCH, 'Ticket was modified simultaneously. Please refresh.');
+      }
+
+      const updated = await tx.ticket.findUnique({
+        where: { id: ticket.id },
         include: customerTicketInclude,
       });
 
@@ -221,14 +275,42 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
           actorId: body.customerId,
           actorName: customer.name,
           actorType: 'customer',
-          metadata: ticket.status === 'WAITING_ON_CUSTOMER'
-            ? { resumedSLA: true, statusChangedTo: 'ASSIGNED' }
-            : {},
+          metadata: {
+            reopened: isReopening,
+            resumedSLA: ticket.status === 'WAITING_ON_CUSTOMER',
+          },
           createdAt: currentTime,
         },
       });
 
-      if (ticket.status === 'WAITING_ON_CUSTOMER') {
+      if (isReopening) {
+        await tx.auditLog.create({
+          data: {
+            ticketId: ticket.id,
+            ticketKey: ticket.ticketKey,
+            action: AuditAction.TICKET_REOPENED,
+            actorId: body.customerId,
+            actorName: customer.name,
+            actorType: 'customer',
+            metadata: {
+              bizMinsSinceResolved,
+              reopenWindowMinutes: REOPEN_WINDOW_MINUTES,
+              trigger: 'customer_reply_and_reopen',
+            },
+            createdAt: currentTime,
+          },
+        });
+
+        await tx.ticketMessage.create({
+          data: {
+            ticketId: ticket.id,
+            type: 'SYSTEM',
+            content: `Ticket reopened by customer reply from ${customer.name}`,
+            senderName: 'System',
+            createdAt: currentTime,
+          },
+        });
+      } else if (ticket.status === 'WAITING_ON_CUSTOMER') {
         await tx.ticketMessage.create({
           data: {
             ticketId: ticket.id,
@@ -240,7 +322,7 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
         });
       }
 
-      return updated;
+      return updated!;
     });
 
     const data = formatCustomerTicket(result, currentTime, holidays, true);

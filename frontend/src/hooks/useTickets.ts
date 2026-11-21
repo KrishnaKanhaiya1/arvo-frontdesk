@@ -142,6 +142,7 @@ export function useCreateTicket() {
       apiFetch<TicketDetail>('/api/tickets', { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tickets'] });
+      qc.invalidateQueries({ queryKey: ['customer-tickets'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Ticket created successfully');
     },
@@ -276,14 +277,18 @@ export function useResetDemo() {
 export function useCustomerReply(key: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { customerId: string; content: string }) =>
+    mutationFn: (body: { customerId: string; content: string; reopen?: boolean }) =>
       apiFetch<TicketDetail>(`/api/customer/tickets/${key}/reply`, { method: 'POST', body: JSON.stringify(body) }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['customer-ticket', key] });
       qc.invalidateQueries({ queryKey: ['customer-tickets'] });
-      toast.success('Reply sent');
+      qc.invalidateQueries({ queryKey: ['ticket', key] });
+      qc.invalidateQueries({ queryKey: ['tickets'] });
+      toast.success(data?.status === 'ASSIGNED' ? 'Reply sent & ticket reopened!' : 'Reply sent');
     },
-    onError: () => toast.error('Failed to send reply'),
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to send reply');
+    },
   });
 }
 
@@ -295,7 +300,12 @@ export function useCustomerReopen(key: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['customer-ticket', key] });
       qc.invalidateQueries({ queryKey: ['customer-tickets'] });
+      qc.invalidateQueries({ queryKey: ['ticket', key] });
+      qc.invalidateQueries({ queryKey: ['tickets'] });
       toast.success('Ticket reopened');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to reopen ticket');
     },
   });
 }

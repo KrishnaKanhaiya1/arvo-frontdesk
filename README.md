@@ -10,15 +10,15 @@ Arvo Frontdesk is built to solve the systemic operational failures documented in
 
 1. **INC-0291 (Double-Take Race Condition):**
    * *Root Cause:* Two agents claimed and replied to the same ticket simultaneously, delivering conflicting answers.
-   * *Architectural Solution:* Optimistic Concurrency Control via integer `version` checking combined with transactional row-level guards. If two agents attempt to claim or reply simultaneously, the second transaction is rejected with `409 Conflict` (`VERSION_MISMATCH` / `ALREADY_CLAIMED`), instantly invalidating the stale client query and alerting the agent without data corruption.
+   * *Architectural Solution:* Atomic Compare-And-Swap (CAS) optimistic concurrency control via conditional `updateMany({ where: { id, version }, data: { ... version: { increment: 1 } } })`. If two agents attempt to claim, reply, change status, or re-prioritize simultaneously, only the first transaction modifies the row; the second fails the conditional match and is rejected with `409 Conflict` (`VERSION_MISMATCH` / `CONFLICT`), instantly notifying the second agent without stale data overwrite or race conditions. Backed by automated concurrency integration tests.
 
 2. **INC-0304 (Private Note Data Leak to Customer):**
    * *Root Cause:* Internal team notes were visible in customer communication channels.
-   * *Architectural Solution:* Complete physical and logical table isolation. Internal notes reside in an isolated `internal_notes` table that is **never** joined, referenced, or queried by any customer endpoint (`/api/customer/*`). Even in the client, a dedicated "Inspect Customer API JSON" drawer proves zero-leak verification at the wire level. In the agent workspace, a mistake-proof "Poka-Yoke" composer physically morphs into a high-visibility amber warning state when authoring private notes.
+   * *Architectural Solution:* Complete physical and logical table isolation reinforced by server-side authorization middleware (`requireAgentRole`). Internal notes reside in an isolated `internal_notes` table that is **never** joined, referenced, or queried by any customer endpoint (`/api/customer/*`). Direct customer requests to `/api/tickets/:key/notes` receive `403 Forbidden`. Even in the client, a dedicated "Inspect Customer API JSON" drawer proves zero-leak verification at the wire level. In the agent workspace, a mistake-proof "Poka-Yoke" composer physically morphs into a high-visibility amber warning state when authoring private notes.
 
-3. **INC-0318 (Unprovable Communication Timestamps):**
+3. **INC-0318 (Unprovable Communication Timestamps & Tamper-Resistant Audit):**
    * *Root Cause:* Customers and support disputed response times with no verifiable audit log.
-   * *Architectural Solution:* Immutable, append-only `audit_log` table stamped with millisecond-precision Indian Standard Time (`Asia/Kolkata`). The backend exposes **no `PUT`, `PATCH`, or `DELETE` endpoints** for audit entries. Every ticket event (creation, claim, first response, status transition, priority change, auto-close) records actor identity, action type, and JSON metadata diffs.
+   * *Architectural Solution:* True database-level immutability enforced via an authoritative PostgreSQL trigger (`prevent_audit_log_modification`) that strictly denies `UPDATE` and `DELETE` operations at the database engine level. Stamped with millisecond-precision Indian Standard Time (`Asia/Kolkata`). Every ticket event (creation, claim, first response, status transition, priority change, auto-close) records actor identity, action type, and JSON metadata diffs. Backed by automated integration tests proving direct database mutations are blocked.
 
 ---
 
@@ -101,12 +101,14 @@ npm run prisma:seed
 ```
 *Seeds 3 agents (Meera, Rahul, Priya), 4 customers, 21 Indian festival holidays for 2026, and the 8 canonical test tickets (ARV-101 through ARV-108).*
 
-### 4. Run the Automated SLA Test Suite
+### 4. Run the Automated Test Suite (32 Passing Tests)
 ```bash
 cd backend
 npm run test
 ```
-*Executes all 23 Vitest test cases validating Friday 6 PM $\rightarrow$ Sunday morning zero-clock rules, holiday skips, mid-flight escalations, auto-close, and reopen windows.*
+*Executes all 32 Vitest test cases across two specialized suites:*
+1. **`sla.test.ts` (23 tests):** Validating business hour boundaries, Friday 6 PM $\rightarrow$ Sunday morning zero-clock rules, holiday skipping, mid-flight escalations, same-day critical resolution mathematics, auto-close, and reopen windows.
+2. **`incidents_and_concurrency.test.ts` (9 tests):** Validating INC-0291 atomic CAS race condition prevention (concurrent claims returning 409), INC-0304 private note security & customer endpoint isolation (403 Forbidden enforcement), INC-0318 database-level PostgreSQL trigger immutability, customer reopen expiration rules, and closed ticket reply guards.
 
 ### 5. Launch the Applications
 In terminal 1 (Backend API):

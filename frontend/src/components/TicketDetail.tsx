@@ -123,7 +123,7 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
 
   const handleTakeOver = () => {
     if (!agentId) return;
-    claimTicket.mutate({ agentId, version: ticket.version });
+    claimTicket.mutate({ agentId, version: ticket.version, allowTakeover: true });
   };
 
   const handleSendReply = (action: ReplyAction) => {

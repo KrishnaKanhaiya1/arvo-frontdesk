@@ -3,7 +3,11 @@ import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { getCurrentTime } from '../services/clock';
 import { computeSLAState } from '../services/slaCompute';
-import { addBusinessMinutes, calculateBusinessMinutesBetween } from '../services/sla';
+import {
+  addBusinessMinutes,
+  calculateBusinessMinutesBetween,
+  calculateInitialResolutionTarget,
+} from '../services/sla';
 import { AppError } from '../middleware/errorHandler';
 import {
   SLA_TARGETS,
@@ -169,6 +173,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     if (!customer) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Customer not found');
 
     const targets = SLA_TARGETS[body.priority];
+    const resolutionTarget = calculateInitialResolutionTarget(currentTime, body.priority, holidays);
 
     const ticket = await prisma.$transaction(async (tx) => {
       // Auto-increment counter
@@ -187,7 +192,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
           status: 'OPEN',
           customerId: body.customerId,
           slaFirstResponseTarget: targets.firstResponseMinutes,
-          slaResolutionTarget: targets.resolutionMinutes,
+          slaResolutionTarget: resolutionTarget,
           slaLastTickAt: currentTime,
           createdAt: currentTime,
           ...(body.linkedFromTicketId ? { linkedFromTicketId: body.linkedFromTicketId } : {}),
@@ -247,6 +252,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 const ClaimSchema = z.object({
   agentId: z.string().min(1),
   version: z.number().int(),
+  allowTakeover: z.boolean().optional(),
 });
 
 router.post('/:key/claim', async (req: Request, res: Response, next: NextFunction) => {
@@ -261,38 +267,67 @@ router.post('/:key/claim', async (req: Request, res: Response, next: NextFunctio
       });
       if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
 
-      // Version check
+      // Version check (pre-check)
       if (ticket.version !== body.version) {
         throw new AppError(409, ERROR_CODES.VERSION_MISMATCH, 'Ticket was modified by another agent. Please refresh.');
       }
 
-      // Already claimed by someone else
-      if (ticket.assigneeId && ticket.assigneeId !== body.agentId) {
+      // Check ownership
+      const isTakeover = !!(ticket.assigneeId && ticket.assigneeId !== body.agentId);
+      if (isTakeover && !body.allowTakeover) {
         throw new AppError(409, ERROR_CODES.CONFLICT, 'Ticket has already been claimed by another agent.');
       }
 
       const agent = await tx.agent.findUnique({ where: { id: body.agentId } });
       if (!agent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Agent not found');
 
-      const updated = await tx.ticket.update({
-        where: { id: ticket.id },
+      // ATOMIC COMPARE-AND-SWAP CONDITIONAL UPDATE:
+      // Prevents INC-0291 race condition at database level
+      const condition: any = {
+        id: ticket.id,
+        version: body.version,
+      };
+
+      if (!isTakeover) {
+        // Must be unassigned or already assigned to same agent
+        condition.OR = [
+          { assigneeId: null },
+          { assigneeId: body.agentId },
+        ];
+      }
+
+      const updateResult = await tx.ticket.updateMany({
+        where: condition,
         data: {
           assigneeId: body.agentId,
           status: 'ASSIGNED',
           version: { increment: 1 },
         },
+      });
+
+      if (updateResult.count !== 1) {
+        throw new AppError(
+          409,
+          ERROR_CODES.CONFLICT,
+          'Race condition prevented: Ticket was claimed or updated by another agent simultaneously.'
+        );
+      }
+
+      const updated = await tx.ticket.findUnique({
+        where: { id: ticket.id },
         include: ticketIncludeWithMessages,
       });
 
+      const auditAction = isTakeover ? AuditAction.ASSIGNED_TRANSFERRED : AuditAction.TICKET_CLAIMED;
       await tx.auditLog.create({
         data: {
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
-          action: AuditAction.TICKET_CLAIMED,
+          action: auditAction,
           actorId: body.agentId,
           actorName: agent.name,
           actorType: 'agent',
-          metadata: {},
+          metadata: isTakeover ? { previousAssigneeId: ticket.assigneeId } : {},
           createdAt: currentTime,
         },
       });
@@ -301,13 +336,15 @@ router.post('/:key/claim', async (req: Request, res: Response, next: NextFunctio
         data: {
           ticketId: ticket.id,
           type: 'SYSTEM',
-          content: `Ticket claimed by ${agent.name}`,
+          content: isTakeover
+            ? `Ticket ownership transferred to ${agent.name}`
+            : `Ticket claimed by ${agent.name}`,
           senderName: 'System',
           createdAt: currentTime,
         },
       });
 
-      return updated;
+      return updated!;
     });
 
     const data = await formatTicket(result, currentTime, holidays, true);
@@ -424,9 +461,24 @@ router.post('/:key/reply', async (req: Request, res: Response, next: NextFunctio
         });
       }
 
-      const updated = await tx.ticket.update({
-        where: { id: ticket.id },
+      const updateRes = await tx.ticket.updateMany({
+        where: {
+          id: ticket.id,
+          version: body.version,
+        },
         data: updateData,
+      });
+
+      if (updateRes.count !== 1) {
+        throw new AppError(
+          409,
+          ERROR_CODES.VERSION_MISMATCH,
+          'Ticket was updated by another user simultaneously. State refreshed.'
+        );
+      }
+
+      const updated = await tx.ticket.findUnique({
+        where: { id: ticket.id },
         include: ticketIncludeWithMessages,
       });
 
@@ -530,6 +582,7 @@ router.patch('/:key/priority', async (req: Request, res: Response, next: NextFun
       const currentResElapsed = ticket.slaResolutionElapsed + liveElapsed;
 
       const newTargets = SLA_TARGETS[body.newPriority];
+      const newResTarget = calculateInitialResolutionTarget(ticket.createdAt, body.newPriority, holidays);
 
       const beforeState = {
         priority: ticket.priority,
@@ -539,21 +592,36 @@ router.patch('/:key/priority', async (req: Request, res: Response, next: NextFun
       const afterState = {
         priority: body.newPriority,
         firstResponseTarget: newTargets.firstResponseMinutes,
-        resolutionTarget: newTargets.resolutionMinutes,
+        resolutionTarget: newResTarget,
       };
 
-      const updated = await tx.ticket.update({
-        where: { id: ticket.id },
+      const updateRes = await tx.ticket.updateMany({
+        where: {
+          id: ticket.id,
+          version: body.version,
+        },
         data: {
           priority: body.newPriority,
           slaFirstResponseTarget: newTargets.firstResponseMinutes,
-          slaResolutionTarget: newTargets.resolutionMinutes,
+          slaResolutionTarget: newResTarget,
           // Preserve elapsed
           slaFirstResponseElapsed: currentFRElapsed,
           slaResolutionElapsed: currentResElapsed,
           slaLastTickAt: currentTime,
           version: { increment: 1 },
         },
+      });
+
+      if (updateRes.count !== 1) {
+        throw new AppError(
+          409,
+          ERROR_CODES.VERSION_MISMATCH,
+          'Ticket was updated by another user simultaneously. State refreshed.'
+        );
+      }
+
+      const updated = await tx.ticket.findUnique({
+        where: { id: ticket.id },
         include: ticketIncludeWithMessages,
       });
 
@@ -674,9 +742,24 @@ router.patch('/:key/status', async (req: Request, res: Response, next: NextFunct
         updateData.slaResolutionBreached = resElapsed > ticket.slaResolutionTarget;
       }
 
-      const updated = await tx.ticket.update({
-        where: { id: ticket.id },
+      const updateRes = await tx.ticket.updateMany({
+        where: {
+          id: ticket.id,
+          version: body.version,
+        },
         data: updateData,
+      });
+
+      if (updateRes.count !== 1) {
+        throw new AppError(
+          409,
+          ERROR_CODES.VERSION_MISMATCH,
+          'Ticket was updated by another user simultaneously. State refreshed.'
+        );
+      }
+
+      const updated = await tx.ticket.findUnique({
+        where: { id: ticket.id },
         include: ticketIncludeWithMessages,
       });
 

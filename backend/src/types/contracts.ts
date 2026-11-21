@@ -131,6 +131,8 @@ export interface TicketSummary {
   assigneeName: string | null;
   sla: SLAState;
   hasInternalNotes: boolean;     // count > 0 indicator only (never leak content)
+  canReopen?: boolean;
+  reopenWindowExpired?: boolean;
   createdAt: string;             // ISO
   updatedAt: string;
   version: number;               // Optimistic concurrency
@@ -198,6 +200,7 @@ export interface CreateTicketRequest {
 export interface ClaimTicketRequest {
   agentId: string;
   version: number;               // Must match current version for optimistic lock
+  allowTakeover?: boolean;       // Set true when taking over ticket already assigned to another agent
 }
 
 export interface SendReplyRequest {

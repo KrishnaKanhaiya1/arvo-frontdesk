@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronRight, AlertTriangle, ExternalLink } from 'lucide-react';
-import { useCustomerTickets, useCustomerTicket, useCustomerReply, useCustomerReopen } from '../hooks/useTickets';
+import { ChevronDown, ChevronRight, AlertTriangle, ExternalLink, Link2, X } from 'lucide-react';
+import { useCustomerTickets, useCustomerTicket, useCustomerReply, useCustomerReopen, useCreateTicket } from '../hooks/useTickets';
 import { usePersona } from '../hooks/usePersona';
 import {
   getStatusColors,
@@ -27,10 +27,17 @@ export const CustomerView: React.FC = () => {
   const [replyText, setReplyText] = useState('');
   const [showRawJson, setShowRawJson] = useState(false);
 
+  // Linked Follow-up Ticket Dialog state
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
+  const [followUpSubject, setFollowUpSubject] = useState('');
+  const [followUpDescription, setFollowUpDescription] = useState('');
+  const [followUpPriority, setFollowUpPriority] = useState<TicketPriority>(TicketPriority.MEDIUM);
+
   const { data: tickets = [], isLoading: listLoading } = useCustomerTickets(CUSTOMER_ID);
   const { data: ticket, isLoading: detailLoading } = useCustomerTicket(selectedKey);
   const customerReply = useCustomerReply(selectedKey || '');
   const customerReopen = useCustomerReopen(selectedKey || '');
+  const createTicket = useCreateTicket();
 
   const handleSelectTicket = (key: string) => {
     setSelectedKey(key);
@@ -39,20 +46,43 @@ export const CustomerView: React.FC = () => {
     setShowRawJson(false);
   };
 
+  const isResolved = ticket?.status === TicketStatus.RESOLVED;
+  const isClosed = ticket?.status === TicketStatus.CLOSED;
+
   const handleSendReply = () => {
     if (!replyText.trim()) return;
     customerReply.mutate(
-      { customerId: CUSTOMER_ID, content: replyText.trim() },
+      { customerId: CUSTOMER_ID, content: replyText.trim(), reopen: isResolved },
       { onSuccess: () => setReplyText('') }
+    );
+  };
+
+  const handleCreateFollowUp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!followUpSubject.trim() || !ticket) return;
+
+    createTicket.mutate(
+      {
+        customerId: CUSTOMER_ID,
+        subject: followUpSubject.trim(),
+        description: followUpDescription.trim() || `Follow-up to previous ticket ${ticket.ticketKey}`,
+        priority: followUpPriority,
+        linkedFromTicketId: ticket.id,
+      },
+      {
+        onSuccess: (newTicket: any) => {
+          setShowFollowUpModal(false);
+          setFollowUpSubject('');
+          setFollowUpDescription('');
+          handleSelectTicket(newTicket.ticketKey);
+        },
+      }
     );
   };
 
   const handleReopen = () => {
     customerReopen.mutate({ customerId: CUSTOMER_ID });
   };
-
-  const isResolved = ticket?.status === TicketStatus.RESOLVED;
-  const isClosed = ticket?.status === TicketStatus.CLOSED;
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#F6F7F9]">
@@ -122,6 +152,18 @@ export const CustomerView: React.FC = () => {
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${getPriorityColors(ticket.priority)}`}>
                     {ticket.priority}
                   </span>
+                  {ticket.linkedFromTicketKey && (
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] px-2 py-0.5 rounded">
+                      <Link2 className="w-2.5 h-2.5" />
+                      Linked from {ticket.linkedFromTicketKey}
+                    </span>
+                  )}
+                  {ticket.linkedToTicketKey && (
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-[#059669] bg-[#ECFDF5] border border-[#A7F3D0] px-2 py-0.5 rounded">
+                      <Link2 className="w-2.5 h-2.5" />
+                      Follow-up: {ticket.linkedToTicketKey}
+                    </span>
+                  )}
                   <div className="ml-auto">
                     <SLABadge sla={ticket.sla} size="sm" />
                   </div>
@@ -172,14 +214,26 @@ export const CustomerView: React.FC = () => {
 
               {/* Reopen / Reply area */}
               <div className="flex-shrink-0 border-t border-[#E5E7EB] bg-white">
-                {isClosed ? (
+                {isClosed || ticket.reopenWindowExpired ? (
                   <div className="p-4">
-                    <div className="flex items-start gap-3 p-3 bg-[#FEF2F2] border border-[#FECACA] rounded-lg mb-3">
+                    <div className="flex items-start gap-3 p-3.5 bg-[#FEF2F2] border border-[#FECACA] rounded-lg">
                       <AlertTriangle className="w-4 h-4 text-[#DC2626] flex-shrink-0 mt-0.5" />
-                      <div className="text-xs text-[#991B1B]">
-                        <p className="font-semibold">Ticket Closed</p>
-                        <p className="mt-0.5">The reopen window has expired. Please create a new ticket if you need further assistance.</p>
+                      <div className="text-xs text-[#991B1B] flex-1">
+                        <p className="font-semibold text-sm">Ticket Closed — Reopen Window Expired</p>
+                        <p className="mt-1 leading-relaxed text-[#B91C1C]">
+                          This ticket is closed and cannot be reopened directly because the 5-working-day window has elapsed. You can open a linked follow-up ticket that automatically references this ticket to preserve context.
+                        </p>
                       </div>
+                      <button
+                        onClick={() => {
+                          setFollowUpSubject(`[Follow-up to ${ticket.ticketKey}] ${ticket.subject}`);
+                          setFollowUpDescription('');
+                          setShowFollowUpModal(true);
+                        }}
+                        className="px-3.5 py-2 text-xs font-semibold bg-[#DC2626] hover:bg-[#B91C1C] text-white rounded-md transition-colors flex-shrink-0 shadow-sm"
+                      >
+                        Create Linked Follow-Up Ticket
+                      </button>
                     </div>
                   </div>
                 ) : isResolved ? (
@@ -262,6 +316,83 @@ export const CustomerView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Linked Follow-Up Ticket Dialog */}
+      {showFollowUpModal && ticket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-[#E5E7EB] w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E7EB]">
+              <div>
+                <h3 className="text-sm font-semibold text-[#0F172A]">Create Linked Follow-Up Ticket</h3>
+                <p className="text-xs text-[#64748B] mt-0.5">
+                  Preserving context from <span className="font-mono font-semibold text-[#2563EB]">{ticket.ticketKey}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setShowFollowUpModal(false)}
+                className="p-1 rounded-md text-[#94A3B8] hover:text-[#475569] hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateFollowUp} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#475569] mb-1">Subject</label>
+                <input
+                  type="text"
+                  value={followUpSubject}
+                  onChange={e => setFollowUpSubject(e.target.value)}
+                  required
+                  className="w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-2 text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#475569] mb-1">Priority</label>
+                <select
+                  value={followUpPriority}
+                  onChange={e => setFollowUpPriority(e.target.value as TicketPriority)}
+                  className="w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-2 text-[#0F172A] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                >
+                  <option value={TicketPriority.CRITICAL}>Critical (System unusable)</option>
+                  <option value={TicketPriority.MEDIUM}>Medium (Important feature impacted)</option>
+                  <option value={TicketPriority.LOW}>Low (General question / request)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#475569] mb-1">Description / Details</label>
+                <textarea
+                  value={followUpDescription}
+                  onChange={e => setFollowUpDescription(e.target.value)}
+                  placeholder="Explain what further assistance or issue recurrence you are experiencing…"
+                  rows={4}
+                  required
+                  className="w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-2 text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#E5E7EB]">
+                <button
+                  type="button"
+                  onClick={() => setShowFollowUpModal(false)}
+                  className="px-3 py-1.5 text-xs font-semibold border border-[#E5E7EB] rounded-md text-[#475569] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createTicket.isPending || !followUpSubject.trim() || !followUpDescription.trim()}
+                  className="px-3 py-1.5 text-xs font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white rounded-md transition-colors"
+                >
+                  {createTicket.isPending ? 'Creating…' : 'Submit Follow-Up Ticket'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

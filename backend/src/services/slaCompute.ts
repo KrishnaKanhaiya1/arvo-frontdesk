@@ -80,13 +80,16 @@ export function computeSLAState(
   const resRemaining = Math.max(0, resTarget - totalResElapsed);
   const resBreached = ticket.slaResolutionBreached || (!ticket.slaResolutionMet && resRemaining === 0);
 
-  // Calculate deadlines from createdAt (SLA start)
-  // For first response: deadline = createdAt + frTarget business minutes
-  const frDeadline = addBusinessMinutes(ticket.createdAt, frTarget, holidays);
-  // For resolution: deadline = createdAt + resTarget business minutes (this is the target from the SLA clock start)
-  // Actually deadline = slaLastTickAt reference + remaining... but it's simpler to show the absolute deadline from start
-  // We compute it as: the point when elapsed = target, ie addBusinessMinutes(createdAt, frTarget)
-  const resDeadline = addBusinessMinutes(ticket.createdAt, resTarget, holidays);
+  // Calculate deadlines dynamically taking into account remaining business time
+  // This accurately reflects customer waiting pauses and mid-flight priority escalations,
+  // ensuring the countdown and displayed absolute deadline always agree.
+  const frDeadline = ticket.slaFirstResponseMet && ticket.slaFirstResponseMetAt
+    ? ticket.slaFirstResponseMetAt
+    : addBusinessMinutes(currentTime, frRemaining, holidays);
+
+  const resDeadline = ticket.slaResolutionMet && ticket.slaResolutionMetAt
+    ? ticket.slaResolutionMetAt
+    : addBusinessMinutes(currentTime, resRemaining, holidays);
 
   const nextOpen = isBusinessHour(currentTime, holidays)
     ? null

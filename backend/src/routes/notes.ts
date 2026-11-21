@@ -9,9 +9,13 @@ import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { getCurrentTime } from '../services/clock';
 import { AppError } from '../middleware/errorHandler';
+import { requireAgentRole } from '../middleware/auth';
 import { AuditAction, ERROR_CODES } from '../types/contracts';
 
 const router = Router({ mergeParams: true });
+
+// INC-0304 Boundary Guard: Strictly require support agent authorization
+router.use(requireAgentRole);
 
 // ── GET /api/tickets/:key/notes ───────────────────────────────
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {

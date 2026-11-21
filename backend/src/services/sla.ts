@@ -22,7 +22,7 @@ import {
   isEqual,
   format,
 } from 'date-fns';
-import { BUSINESS_HOURS } from '../types/contracts';
+import { BUSINESS_HOURS, SLA_TARGETS } from '../types/contracts';
 
 const TZ = BUSINESS_HOURS.timezone; // 'Asia/Kolkata'
 const BH_START_H = BUSINESS_HOURS.startHour;    // 9
@@ -287,4 +287,62 @@ export function calculateSLADeadline(
   holidays: HolidayInput = [],
 ): Date {
   return addBusinessMinutes(createdAt, targetMinutes, holidays);
+}
+
+/**
+ * Calculates the exact resolution deadline according to Arvo's business rules:
+ * - CRITICAL: "fix it the same working day" -> 18:30 IST on the applicable working day.
+ * - MEDIUM / LOW: target business minutes added from start.
+ */
+export function calculateResolutionDeadline(
+  createdAt: Date,
+  priority: string,
+  targetMinutes: number,
+  holidays: HolidayInput = [],
+): Date {
+  const holidaySet = normalizeHolidays(holidays);
+  const ist = toZonedTime(createdAt, TZ);
+
+  if (priority === 'CRITICAL') {
+    // If during business hours on a working day: deadline is 18:30 IST TODAY.
+    if (isWorkingDay(ist, holidaySet)) {
+      const close = dayCloseZoned(ist);
+      if (isBefore(ist, close)) {
+        return fromZonedTime(close, TZ);
+      }
+    }
+
+    // Created after close, on weekend, or on a holiday:
+    // Applicable working day is the next working day; deadline is 18:30 IST on that day.
+    let cursor = addDays(startOfDay(ist), 1);
+    for (let i = 0; i < 366; i++) {
+      if (isWorkingDay(cursor, holidaySet)) {
+        return fromZonedTime(dayCloseZoned(cursor), TZ);
+      }
+      cursor = addDays(cursor, 1);
+    }
+  }
+
+  // Medium / Low: add target business minutes
+  return addBusinessMinutes(createdAt, targetMinutes, holidays);
+}
+
+/**
+ * Calculates initial resolution target in business minutes.
+ * For CRITICAL: working minutes available until 18:30 on the applicable working day.
+ */
+export function calculateInitialResolutionTarget(
+  createdAt: Date,
+  priority: string,
+  holidays: HolidayInput = [],
+): number {
+  if (priority !== 'CRITICAL') {
+    return SLA_TARGETS[priority as keyof typeof SLA_TARGETS]?.resolutionMinutes ?? 1620;
+  }
+  const deadline = calculateResolutionDeadline(createdAt, 'CRITICAL', 540, holidays);
+  const effectiveStart = isBusinessHour(createdAt, holidays)
+    ? createdAt
+    : getNextBusinessOpen(createdAt, holidays);
+  const minutes = calculateBusinessMinutesBetween(effectiveStart, deadline, holidays);
+  return Math.max(minutes, 30);
 }

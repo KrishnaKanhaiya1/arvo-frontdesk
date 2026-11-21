@@ -1,10 +1,14 @@
 import { PrismaClient } from '@prisma/client';
 import { v4 as uuid } from 'uuid';
+import { installAuditImmutabilityTrigger } from './auditTrigger';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding Arvo Frontdesk database...');
+
+  // Allow cleanup setting for seed script
+  await prisma.$executeRawUnsafe(`SET app.allow_audit_cleanup = 'on';`).catch(() => {});
 
   // Clear existing data
   await prisma.auditLog.deleteMany();
@@ -739,6 +743,9 @@ async function main() {
       },
     ],
   });
+
+  // Enforce DB-level immutability of audit trail (INC-0318)
+  await installAuditImmutabilityTrigger(prisma);
 
   console.log('✅ Seed complete!');
   console.log('   Agents: Meera (lead), Rahul, Priya');

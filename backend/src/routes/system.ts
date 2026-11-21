@@ -7,6 +7,7 @@ import { getCurrentTime, setSimulatedTime } from '../services/clock';
 import { isBusinessHour, getNextBusinessOpen } from '../services/sla';
 import { runAutoClose } from '../services/autoclose';
 import { AppError } from '../middleware/errorHandler';
+import { requireLeadRole } from '../middleware/auth';
 import { ERROR_CODES, BUSINESS_HOURS } from '../types/contracts';
 
 const router = Router();
@@ -55,7 +56,7 @@ const ClockSchema = z.object({
   simulatedTime: z.string().nullable(),
 });
 
-router.post('/clock', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/clock', requireLeadRole, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = ClockSchema.parse(req.body);
     await setSimulatedTime(body.simulatedTime);
@@ -92,7 +93,7 @@ router.post('/clock', async (req: Request, res: Response, next: NextFunction) =>
 });
 
 // ── POST /api/system/run-autoclose ───────────────────────────
-router.post('/run-autoclose', async (_req: Request, res: Response, next: NextFunction) => {
+router.post('/run-autoclose', requireLeadRole, async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await runAutoClose();
     res.json({
@@ -106,7 +107,7 @@ router.post('/run-autoclose', async (_req: Request, res: Response, next: NextFun
 });
 
 // ── POST /api/system/reset-demo ───────────────────────────────
-router.post('/reset-demo', async (_req: Request, res: Response, next: NextFunction) => {
+router.post('/reset-demo', requireLeadRole, async (_req: Request, res: Response, next: NextFunction) => {
   try {
     execSync('npx tsx prisma/seed.ts', {
       cwd: process.cwd(),
