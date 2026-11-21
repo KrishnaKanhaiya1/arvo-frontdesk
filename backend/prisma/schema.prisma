@@ -24,7 +24,6 @@ model Agent {
   assignedTickets Ticket[]       @relation("AssignedAgent")
   messages        TicketMessage[]
   internalNotes   InternalNote[]
-  auditEntries    AuditLog[]     @relation("AuditActor")
 
   @@map("agents")
 }
@@ -168,8 +167,6 @@ model AuditLog {
   metadata  Json     @default("{}") // Before/after values, details
 
   createdAt DateTime @default(now()) @map("created_at")
-
-  actor Agent? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([ticketId])
   @@index([createdAt])

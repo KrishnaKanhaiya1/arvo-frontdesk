@@ -7,5 +7,5 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   });
   const json = await res.json();
   if (!res.ok) throw { status: res.status, ...json.error };
-  return json.data;
+  return (json.data !== undefined ? json.data : json) as T;
 }

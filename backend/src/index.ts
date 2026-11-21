@@ -21,7 +21,7 @@ app.use(requestLogger);
 
 // Health check endpoint
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
+  res.json({ success: true, data: { status: 'ok', uptime: process.uptime() }, status: 'ok', uptime: process.uptime() });
 });
 
 // Mount Routes
