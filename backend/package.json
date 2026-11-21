@@ -1,0 +1,38 @@
+{
+  "name": "arvo-frontdesk-backend",
+  "version": "1.0.0",
+  "description": "Arvo Frontdesk - Support Ticket Management Backend",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "node-cron": "^3.0.3",
+    "zod": "^3.23.0",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/uuid": "^10.0.0",
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,206 @@
+// Arvo Frontdesk — Prisma Schema
+// PostgreSQL on Neon
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Agents (pre-seeded, no auth) ─────────────────────────────
+
+model Agent {
+  id             String   @id @default(uuid())
+  name           String
+  email          String   @unique
+  role           String   @default("agent") // 'lead' | 'agent'
+  avatarColor    String   @default("#2563EB")
+  avatarInitials String   @default("??")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  assignedTickets Ticket[]       @relation("AssignedAgent")
+  messages        TicketMessage[]
+  internalNotes   InternalNote[]
+  auditEntries    AuditLog[]     @relation("AuditActor")
+
+  @@map("agents")
+}
+
+// ── Customers (pre-seeded) ───────────────────────────────────
+
+model Customer {
+  id             String   @id @default(uuid())
+  name           String
+  email          String   @unique
+  company        String
+  avatarColor    String   @default("#059669")
+  avatarInitials String   @default("??")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  tickets        Ticket[]
+  messages       TicketMessage[] @relation("CustomerMessages")
+
+  @@map("customers")
+}
+
+// ── Tickets ──────────────────────────────────────────────────
+
+model Ticket {
+  id        String   @id @default(uuid())
+  ticketKey String   @unique @map("ticket_key") // ARV-101, ARV-102, etc.
+  subject   String
+  description String @default("")
+  priority  String   // CRITICAL | MEDIUM | LOW
+  status    String   @default("OPEN") // OPEN | ASSIGNED | WAITING_ON_CUSTOMER | RESOLVED | CLOSED
+
+  // Ownership
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+  assigneeId String?  @map("assignee_id")
+  assignee   Agent?   @relation("AssignedAgent", fields: [assigneeId], references: [id])
+
+  // SLA tracking (all in business minutes)
+  slaFirstResponseTarget   Int       @map("sla_fr_target")    // Target minutes
+  slaResolutionTarget      Int       @map("sla_res_target")   // Target minutes
+  slaFirstResponseElapsed  Int       @default(0) @map("sla_fr_elapsed")   // Accumulated business minutes
+  slaResolutionElapsed     Int       @default(0) @map("sla_res_elapsed")  // Accumulated business minutes
+  slaFirstResponseMet      Boolean   @default(false) @map("sla_fr_met")
+  slaFirstResponseMetAt    DateTime? @map("sla_fr_met_at")
+  slaResolutionMet         Boolean   @default(false) @map("sla_res_met")
+  slaResolutionMetAt       DateTime? @map("sla_res_met_at")
+  slaFirstResponseBreached Boolean   @default(false) @map("sla_fr_breached")
+  slaResolutionBreached    Boolean   @default(false) @map("sla_res_breached")
+
+  // Pause tracking
+  isPaused               Boolean   @default(false) @map("is_paused")
+  pausedAt               DateTime? @map("paused_at")
+  totalPausedMinutes     Int       @default(0) @map("total_paused_minutes")
+  waitingOnCustomerSince DateTime? @map("waiting_on_customer_since")
+
+  // The last time SLA counters were recalculated (for incremental elapsed computation)
+  slaLastTickAt          DateTime  @map("sla_last_tick_at")
+
+  // Timestamps
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  resolvedAt   DateTime? @map("resolved_at")
+  closedAt     DateTime? @map("closed_at")
+  firstResponseAt DateTime? @map("first_response_at")
+
+  // Linked tickets (reopen → new ticket)
+  linkedFromTicketId  String? @map("linked_from_ticket_id")
+  linkedFromTicket    Ticket? @relation("LinkedTickets", fields: [linkedFromTicketId], references: [id])
+  linkedToTickets     Ticket[] @relation("LinkedTickets")
+
+  // Optimistic concurrency control (INC-0291)
+  version Int @default(1)
+
+  // Relations
+  messages      TicketMessage[]
+  internalNotes InternalNote[]
+  auditEntries  AuditLog[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([assigneeId])
+  @@index([customerId])
+  @@index([ticketKey])
+  @@map("tickets")
+}
+
+// ── Ticket Messages (customer + agent public replies + system) ──
+
+model TicketMessage {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  type      String   // CUSTOMER | AGENT_PUBLIC | SYSTEM
+  content   String
+  
+  // Sender can be agent or customer
+  agentId    String? @map("agent_id")
+  agent      Agent?  @relation(fields: [agentId], references: [id])
+  customerId String? @map("customer_id")
+  customer   Customer? @relation("CustomerMessages", fields: [customerId], references: [id])
+  senderName String  @map("sender_name")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ticketId])
+  @@map("ticket_messages")
+}
+
+// ── Internal Notes (INC-0304: COMPLETELY SEPARATE TABLE) ─────
+// CRITICAL: This table is NEVER queried by customer-facing endpoints.
+// No foreign key from TicketMessage. No join. No shared query.
+
+model InternalNote {
+  id       String @id @default(uuid())
+  ticketId String @map("ticket_id")
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  content  String
+  authorId String @map("author_id")
+  author   Agent  @relation(fields: [authorId], references: [id])
+  authorName String @map("author_name")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ticketId])
+  @@map("internal_notes")
+}
+
+// ── Audit Log (INC-0318: APPEND-ONLY, IMMUTABLE) ────────────
+// No UPDATE or DELETE operations are ever performed on this table.
+// The application enforces this at the service layer.
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  ticketKey String   @map("ticket_key")
+  action    String   // AuditAction enum value
+  actorId   String   @map("actor_id")
+  actorName String   @map("actor_name")
+  actorType String   @map("actor_type") // 'agent' | 'customer' | 'system'
+  metadata  Json     @default("{}") // Before/after values, details
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  actor Agent? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([ticketId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+// ── Festival Holidays ────────────────────────────────────────
+
+model Holiday {
+  id   String @id @default(uuid())
+  date DateTime @db.Date
+  name String
+
+  @@unique([date])
+  @@map("holidays")
+}
+
+// ── System Config (demo clock, etc.) ─────────────────────────
+
+model SystemConfig {
+  key   String @id
+  value String
+
+  @@map("system_config")
+}
+
+// ── Ticket Counter (for ARV-NNN generation) ──────────────────
+
+model TicketCounter {
+  id      String @id @default("singleton")
+  counter Int    @default(100)
+
+  @@map("ticket_counter")
+}
