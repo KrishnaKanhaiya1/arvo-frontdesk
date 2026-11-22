@@ -19,7 +19,7 @@ We implemented a pure, deterministic business hours calculation engine (`backend
 2. **Operating Window:** Working hours are strictly **09:30 to 18:30 IST (9 hours = 540 business minutes per working day)**, Monday through Friday.
 3. **Weekend & Holiday Exclusion:** Saturdays, Sundays, and Gazetted Indian Festival Holidays accrue exactly 0 business minutes. Any ticket created on Friday at 18:00 has elapsed exactly 0 business minutes as of Monday at 09:30.
 4. **Deterministic SLA Matrix:**
-   - **Critical / Blocker:** First Response target: **120 business minutes (2.0 working hours)**; Resolution target: **540 business minutes (1.0 working day)**. If created during morning business hours, resolution is guaranteed by 18:30 IST the same day.
+   - **Critical / Blocker:** First Response target: **120 business minutes (2.0 working hours)**; Resolution target: **540 business minutes (1.0 working day)**. If created during morning business hours, resolution is guaranteed by 18:30 IST the same day. If fewer than 120 business minutes remain on the arrival day (arriving after 16:30 IST, such as Friday at 18:00), the resolution target sets the deadline to 18:30 IST on the next working day, preventing false weekend breaches.
    - **Medium:** First Response target: **270 business minutes (4.5 working hours / 0.5 working day)**; Resolution target: **1620 business minutes (3.0 working days)**.
    - **Low:** First Response target: **540 business minutes (9.0 working hours / 1.0 working day)**; Resolution target: **2700 business minutes (5.0 working days / 1.0 working week)**.
 5. **Elapsed Time Carryover on Priority Escalation:**
@@ -78,20 +78,20 @@ We enforce physical, wire-level isolation between internal notes and customer co
 SOC 2, ISO 27001, and corporate compliance regulations require non-repudiable audit logs of all ticket state changes, priority escalations, reassignments, and SLA adjustments. Application-level logging alone is vulnerable to bugs or administrative circumvention.
 
 #### Decision
-1. **Append-Only Table:** All operational lifecycle events are recorded in `audit_events`.
+1. **Append-Only Table:** All operational lifecycle events are recorded in `audit_log`.
 2. **PostgreSQL Database Trigger:** A native row-level trigger is installed directly on the PostgreSQL database:
    ```sql
-   CREATE OR REPLACE FUNCTION prevent_audit_tampering()
+   CREATE OR REPLACE FUNCTION prevent_audit_log_modification()
    RETURNS TRIGGER AS $$
    BEGIN
-     RAISE EXCEPTION 'Audit records are immutable and cannot be updated or deleted.';
+     RAISE EXCEPTION 'Audit log entries are immutable and append-only. UPDATE and DELETE operations are strictly forbidden at the database layer (INC-0318).';
    END;
    $$ LANGUAGE plpgsql;
 
-   DROP TRIGGER IF EXISTS trg_audit_immutability ON audit_events;
-   CREATE TRIGGER trg_audit_immutability
-   BEFORE UPDATE OR DELETE ON audit_events
-   FOR EACH ROW EXECUTE FUNCTION prevent_audit_tampering();
+   DROP TRIGGER IF EXISTS audit_log_immutability_trg ON audit_log;
+   CREATE TRIGGER audit_log_immutability_trg
+   BEFORE UPDATE OR DELETE ON audit_log
+   FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification();
    ```
 3. **API Level Invariant:** There are zero `PUT`, `PATCH`, or `DELETE` endpoints for audit records in the API.
 
