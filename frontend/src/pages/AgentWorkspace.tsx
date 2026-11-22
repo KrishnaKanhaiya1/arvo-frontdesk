@@ -56,8 +56,19 @@ function sortBySLAUrgency(tickets: TicketSummary[]): TicketSummary[] {
 export const AgentWorkspace: React.FC = () => {
   const { ticketKey: urlTicketKey } = useParams<{ ticketKey: string }>();
   const navigate = useNavigate();
-  const { agentId } = usePersona();
+  const { role, actorId, agentId, setAgentPersona } = usePersona();
   const [selectedTicketKey, setSelectedTicketKey] = useState<string | null>(urlTicketKey || null);
+
+  // Enforce role isolation: if customer visits /tickets, route or switch appropriately
+  useEffect(() => {
+    if (role === 'customer') {
+      if (actorId === 'customer-vikram' || !actorId) {
+        setAgentPersona('agent-meera');
+      } else {
+        navigate('/customer', { replace: true });
+      }
+    }
+  }, [role, actorId, setAgentPersona, navigate]);
 
   useEffect(() => {
     if (selectedTicketKey) {
