@@ -9,14 +9,14 @@ export async function generateNextTicketKey(tx: Prisma.TransactionClient): Promi
   // Ensure the singleton row exists
   await tx.$executeRawUnsafe(`
     INSERT INTO "ticket_counter" (id, counter)
-    VALUES ('singleton', (SELECT COALESCE(MAX(CAST(SUBSTRING("ticketKey" FROM 5) AS INTEGER)), 100) FROM "ticket"))
+    VALUES ('singleton', (SELECT COALESCE(MAX(CAST(SUBSTRING("ticket_key" FROM 5) AS INTEGER)), 100) FROM "tickets"))
     ON CONFLICT (id) DO NOTHING;
   `);
 
   // Atomic row lock & increment in one statement
   const rows: any = await tx.$queryRawUnsafe(`
     UPDATE "ticket_counter"
-    SET counter = GREATEST(counter, (SELECT COALESCE(MAX(CAST(SUBSTRING("ticketKey" FROM 5) AS INTEGER)), 100) FROM "ticket")) + 1
+    SET counter = GREATEST(counter, (SELECT COALESCE(MAX(CAST(SUBSTRING("ticket_key" FROM 5) AS INTEGER)), 100) FROM "tickets")) + 1
     WHERE id = 'singleton'
     RETURNING counter;
   `);
