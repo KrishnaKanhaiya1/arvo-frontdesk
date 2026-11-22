@@ -233,19 +233,6 @@ export const CustomerView: React.FC = () => {
           >
             {customerInitials || 'CU'}
           </div>
-
-          {/* Sign Out / Back to Login */}
-          <button
-            onClick={async () => {
-              await logout();
-              navigate('/login');
-            }}
-            className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-semibold text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface-subtle)] border border-[var(--border)] rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Sign out and return to Login Gateway"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Sign Out</span>
-          </button>
         </div>
       </header>
 
