@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTickets, useResetDemo } from '../hooks/useTickets';
+import { useTickets, useResetDemo, useSystemClock, useSetClock } from '../hooks/useTickets';
 import { usePersona } from '../hooks/usePersona';
 import { IconRail } from '../components/IconRail';
 import { TopBar } from '../components/TopBar';
@@ -16,8 +16,8 @@ import { DemoClockPopover } from '../components/DemoClockPopover';
 import { KeyboardShortcutsLegend } from '../components/KeyboardShortcutsLegend';
 import type { TicketSummary } from '../types/contracts';
 import { TicketStatus, TicketPriority } from '../types/contracts';
-import { getSLAOverallState } from '../lib/utils';
-import { List, MessageSquare, Info, Menu } from 'lucide-react';
+import { getSLAOverallState, formatIST } from '../lib/utils';
+import { List, MessageSquare, Info, Menu, Clock } from 'lucide-react';
 
 export type QueueFilter =
   | 'all'
@@ -69,6 +69,8 @@ export const AgentWorkspace: React.FC = () => {
 
   const { data: allTickets = [] } = useTickets();
   const resetDemo = useResetDemo();
+  const { data: clock } = useSystemClock();
+  const setClock = useSetClock();
 
   // Sync URL → state
   useEffect(() => {
@@ -200,6 +202,27 @@ export const AgentWorkspace: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* TopBar */}
         <TopBar onOpenEvaluatorGuide={() => setShowEvaluatorGuide(true)} />
+
+        {/* Simulation Clock Override Banner */}
+        {clock?.isSimulated && (
+          <div className="bg-amber-500/10 dark:bg-amber-950/50 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between text-xs text-amber-800 dark:text-amber-200 z-10 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 animate-pulse text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>
+                <strong>Simulated Time Active:</strong> Engine is evaluating SLA against simulated clock (
+                {formatIST(clock.currentTime)}).
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setClock.mutate({ simulatedTime: null })}
+              disabled={setClock.isPending}
+              className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-medium text-[11px] transition-colors cursor-pointer shrink-0"
+            >
+              Return to Live Clock
+            </button>
+          </div>
+        )}
 
         {/* Telemetry Strip */}
         <TelemetryStrip onFilterChange={handleQueueFilter} activeQueue={activeQueue} />

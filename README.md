@@ -80,9 +80,9 @@ The application features a real credentials authentication system (`POST /api/au
 
 ---
 
-## 🖥️ UI/UX Design Benchmark — Exceeding Reference 2 Standards
+## 🖥️ UI/UX Design System & Operator Experience
 
-The frontend has been completely transformed following the high-end design patterns of **Nippon Toyota Incentive Console**, elevating Arvo Frontdesk into an elite enterprise command center:
+The frontend is engineered as an enterprise-grade command center with focused operator ergonomics:
 
 1. **Floating Inset Card Architecture:**
    * Contained inside a centered `max-w-7xl` floating card with `rounded-[2rem]`, crisp 1px borders, and an elevated shadow (`shadow-[0_35px_90px_-45px_rgba(15,23,42,0.45)]`).

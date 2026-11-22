@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Lock, User, AlertCircle, Check, Save } from 'lucide-react';
+import { ChevronDown, Lock, User, AlertCircle, Check, Save, Loader2 } from 'lucide-react';
 import {
   useTicket,
   useInternalNotes,
@@ -47,7 +47,7 @@ function mergeTimeline(messages: TicketMessage[], notes: InternalNote[]): Timeli
 export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
   const qc = useQueryClient();
   const { agentId, agentName } = usePersona();
-  const { data: ticket, isLoading } = useTicket(ticketKey);
+  const { data: ticket, isLoading, isError } = useTicket(ticketKey);
   const { data: notes = [] } = useInternalNotes(ticketKey);
   const claimTicket = useClaimTicket(ticketKey || '');
   const sendReply = useSendReply(ticketKey || '');
@@ -140,10 +140,35 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
     );
   }
 
-  if (isLoading || !ticket) {
+  if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#F8FAFC]">
-        <div className="text-xs text-[#94A3B8]">Loading ticket…</div>
+      <div className="flex-1 flex items-center justify-center bg-[var(--surface)] text-[var(--muted)]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          <span className="text-xs font-medium">Loading ticket details…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!ticket || isError) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-[var(--surface-subtle)] p-6">
+        <div className="max-w-md w-full text-center bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-8 shadow-sm">
+          <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600 dark:text-amber-400">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-semibold text-[var(--content)] mb-1">Ticket Not Found or Access Restricted</h3>
+          <p className="text-xs text-[var(--muted)] mb-5 leading-relaxed">
+            The requested ticket <strong>{ticketKey}</strong> could not be loaded. It may not exist, or your session does not have authorization to view it.
+          </p>
+          <a
+            href="/"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
+          >
+            Return to Queue
+          </a>
+        </div>
       </div>
     );
   }

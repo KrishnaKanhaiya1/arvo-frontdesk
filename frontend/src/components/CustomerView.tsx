@@ -21,7 +21,9 @@ import {
   LogOut,
   Save,
   CheckCircle,
-  Database
+  Database,
+  ShieldAlert,
+  Loader2
 } from 'lucide-react';
 import { useCustomerTickets, useCustomerTicket, useCustomerReply, useCustomerReopen, useCreateTicket } from '../hooks/useTickets';
 import { usePersona } from '../hooks/usePersona';
@@ -67,7 +69,7 @@ export const CustomerView: React.FC = () => {
   const [followUpPriority, setFollowUpPriority] = useState<TicketPriority>(TicketPriority.MEDIUM);
 
   const { data: tickets = [], isLoading: listLoading } = useCustomerTickets(activeCustomerId);
-  const { data: ticket, isLoading: detailLoading } = useCustomerTicket(selectedKey);
+  const { data: ticket, isLoading: detailLoading, isError: detailError } = useCustomerTicket(selectedKey);
   const customerReply = useCustomerReply(selectedKey || '');
   const customerReopen = useCustomerReopen(selectedKey || '');
   const createTicket = useCreateTicket();
@@ -223,7 +225,7 @@ export const CustomerView: React.FC = () => {
                   Customer Data Boundary Verified (INC-0304 / Multi-Tenant Isolation)
                 </strong>
                 <p className="text-[11px] text-[var(--muted)] mt-0.5">
-                  Cryptographically verified server-side boundary isolation ensuring zero data leakage across organizations and roles.
+                  Server-enforced multi-tenant isolation ensuring zero internal note or cross-customer data leakage.
                 </p>
               </div>
             </div>
@@ -330,9 +332,34 @@ export const CustomerView: React.FC = () => {
               <Building2 className="w-10 h-10 stroke-[1.2] mb-2 text-[var(--subtle)]" />
               <p className="text-xs font-medium">Select a support ticket from the list to view conversation history and resolution progress.</p>
             </div>
-          ) : detailLoading || !ticket ? (
+          ) : detailLoading ? (
             <div className="flex-1 flex items-center justify-center text-xs text-[var(--muted)]">
-              Loading ticket details…
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                <span>Loading ticket details…</span>
+              </div>
+            </div>
+          ) : detailError || !ticket ? (
+            <div className="flex-1 flex items-center justify-center p-6 text-[var(--muted)]">
+              <div className="max-w-md w-full text-center bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-8 shadow-sm">
+                <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600 dark:text-amber-400">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-semibold text-[var(--content)] mb-1">Ticket Unavailable</h3>
+                <p className="text-xs text-[var(--muted)] mb-5 leading-relaxed">
+                  Ticket <strong>{selectedKey}</strong> does not exist or belongs to another organization. Customer access is strictly restricted to your organization's tickets.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedKey(null);
+                    navigate('/customer');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Return to My Tickets
+                </button>
+              </div>
             </div>
           ) : (
             <>

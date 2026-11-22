@@ -36,7 +36,7 @@ const SLIDES = [
   {
     image: '/arvo-datacenter-racks.jpg',
     title: 'High-Density Cloud Core',
-    subtitle: 'Zero-drift business-hours calculation with PostgreSQL triggers',
+    subtitle: 'Deterministic business-hours calculation with PostgreSQL triggers',
   },
 ];
 
@@ -118,7 +118,7 @@ export const LoginPage: React.FC = () => {
   const highlights = [
     { icon: BarChart3, label: 'Live SLA calculation', color: 'text-blue-600' },
     { icon: ShieldCheck, label: 'Role-based access', color: 'text-emerald-600' },
-    { icon: TimerReset, label: 'Zero-drift engine', color: 'text-purple-600' },
+    { icon: TimerReset, label: 'Deterministic SLA engine', color: 'text-purple-600' },
   ];
 
   const workflowSteps = [
@@ -130,7 +130,7 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--surface-subtle)] px-3 py-4 sm:px-6 lg:px-10 flex items-center justify-center transition-colors duration-200">
       <main className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl w-full items-center justify-center">
-        {/* Floating Card Container Matching Reference 2 Benchmark */}
+        {/* Floating Card Container */}
         <div className="relative flex w-full flex-col overflow-y-auto lg:overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_35px_90px_-45px_rgba(15,23,42,0.45)] lg:grid lg:min-h-[740px] lg:grid-cols-[0.92fr_1.08fr]">
           
           {/* Header Bar Spanning Across Top of Card */}

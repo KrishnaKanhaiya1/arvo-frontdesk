@@ -9,6 +9,7 @@ export type PersonaMode = 'agent' | 'customer';
 export interface PersonaState {
   isAuthenticated: boolean;
   isLoadingSession: boolean;
+  isSwitchingPersona: boolean;
   mode: PersonaMode;
   role: 'lead' | 'agent' | 'customer';
   isLead: boolean;
@@ -21,6 +22,8 @@ export interface PersonaState {
   customerId: string | null;
   customerName: string;
   customerCompany: string;
+  customerInitials: string;
+  customerColor: string;
   agents: Agent[];
 }
 
@@ -41,22 +44,28 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
     const isAuth = localStorage.getItem('arvo_authenticated') === 'true';
     const savedRole = (localStorage.getItem('arvo_actor_role') as PersonaMode) || 'agent';
     const savedId = localStorage.getItem('arvo_actor_id') || 'agent-meera';
+    const isCustomer = savedRole === 'customer';
 
     return {
       isAuthenticated: isAuth,
       isLoadingSession: true,
-      mode: savedRole === 'customer' ? 'customer' : 'agent',
-      role: savedRole === 'customer' ? 'customer' : (savedId === 'agent-meera' ? 'lead' : 'agent'),
-      isLead: savedRole !== 'customer' && savedId === 'agent-meera',
+      isSwitchingPersona: false,
+      mode: isCustomer ? 'customer' : 'agent',
+      role: isCustomer ? 'customer' : (savedId === 'agent-meera' ? 'lead' : 'agent'),
+      isLead: !isCustomer && savedId === 'agent-meera',
       actorId: isAuth ? savedId : '',
-      actorName: savedId === 'agent-meera' ? 'Meera Krishnan' : savedId === 'agent-rahul' ? 'Rahul Sharma' : savedId === 'agent-priya' ? 'Priya Patel' : 'Vikram Patel',
-      agentId: isAuth && savedRole === 'agent' ? savedId : null,
-      agentName: isAuth && savedRole === 'agent' ? (savedId === 'agent-meera' ? 'Meera Krishnan' : 'Support Agent') : null,
-      agentInitials: savedId === 'agent-meera' ? 'MK' : savedId === 'agent-rahul' ? 'RS' : savedId === 'agent-priya' ? 'PN' : 'VP',
-      agentColor: savedId === 'agent-meera' ? '#7C3AED' : savedId === 'agent-rahul' ? '#2563EB' : savedId === 'agent-priya' ? '#059669' : '#D97706',
-      customerId: isAuth && savedRole === 'customer' ? savedId : null,
+      actorName: isCustomer 
+        ? 'Vikram Patel' 
+        : (savedId === 'agent-meera' ? 'Meera Krishnan' : savedId === 'agent-rahul' ? 'Rahul Sharma' : 'Priya Patel'),
+      agentId: isAuth && !isCustomer ? savedId : null,
+      agentName: isAuth && !isCustomer ? (savedId === 'agent-meera' ? 'Meera Krishnan' : savedId === 'agent-rahul' ? 'Rahul Sharma' : 'Priya Patel') : null,
+      agentInitials: savedId === 'agent-rahul' ? 'RS' : savedId === 'agent-priya' ? 'PN' : 'MK',
+      agentColor: savedId === 'agent-rahul' ? '#2563EB' : savedId === 'agent-priya' ? '#059669' : '#7C3AED',
+      customerId: isAuth && isCustomer ? savedId : null,
       customerName: 'Vikram Patel',
       customerCompany: 'Acme Corp',
+      customerInitials: 'VP',
+      customerColor: '#DC2626',
       agents: [],
     };
   });
@@ -75,6 +84,7 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
             ...s,
             isAuthenticated: true,
             isLoadingSession: false,
+            isSwitchingPersona: false,
             mode: isCust ? 'customer' : 'agent',
             role: u.role,
             isLead: u.role === 'lead',
@@ -82,11 +92,13 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
             actorName: u.name,
             agentId: isCust ? null : u.userId,
             agentName: isCust ? null : u.name,
-            agentInitials: u.avatarInitials || (u.userId === 'agent-meera' ? 'MK' : u.userId === 'agent-rahul' ? 'RS' : u.userId === 'agent-priya' ? 'PN' : 'VP'),
-            agentColor: u.avatarColor || (u.userId === 'agent-meera' ? '#7C3AED' : u.userId === 'agent-rahul' ? '#2563EB' : u.userId === 'agent-priya' ? '#059669' : '#D97706'),
+            agentInitials: isCust ? (s.agentInitials || 'MK') : (u.avatarInitials || (u.userId === 'agent-meera' ? 'MK' : u.userId === 'agent-rahul' ? 'RS' : 'PN')),
+            agentColor: isCust ? (s.agentColor || '#7C3AED') : (u.avatarColor || (u.userId === 'agent-meera' ? '#7C3AED' : u.userId === 'agent-rahul' ? '#2563EB' : '#059669')),
             customerId: isCust ? u.userId : null,
             customerName: isCust ? u.name : 'Vikram Patel',
             customerCompany: isCust ? (u.company || 'Acme Corp') : 'Acme Corp',
+            customerInitials: isCust ? (u.avatarInitials || 'VP') : 'VP',
+            customerColor: isCust ? (u.avatarColor || '#DC2626') : '#DC2626',
           }));
         } else {
           // No active session cookie on server
@@ -95,6 +107,7 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
             ...s,
             isAuthenticated: false,
             isLoadingSession: false,
+            isSwitchingPersona: false,
             actorId: '',
             agentId: null,
             customerId: null,
@@ -102,7 +115,7 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        setState((s) => ({ ...s, isLoadingSession: false }));
+        setState((s) => ({ ...s, isLoadingSession: false, isSwitchingPersona: false }));
       });
   }, []);
 
@@ -125,6 +138,10 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('arvo_actor_role', 'agent');
     localStorage.setItem('arvo_actor_id', agentId);
 
+    // Clear stale cached queries immediately to prevent flash of previous persona state
+    queryClient.clear();
+    setState((s) => ({ ...s, isSwitchingPersona: true }));
+
     // Issue server-side session cookie
     try {
       const res = await loginDemoPersona(agentId);
@@ -132,6 +149,7 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
       setState((s) => ({
         ...s,
         isAuthenticated: true,
+        isSwitchingPersona: false,
         mode: 'agent',
         role: (u.role || agent?.role || 'agent') as 'lead' | 'agent',
         isLead: (u.role || agent?.role) === 'lead',
@@ -139,14 +157,15 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
         actorName: u.name || agent?.name || agentId,
         agentId,
         agentName: u.name || agent?.name || agentId,
-        agentInitials: u.avatarInitials || (agentId === 'agent-meera' ? 'MK' : agentId === 'agent-rahul' ? 'RS' : agentId === 'agent-priya' ? 'PN' : 'AG'),
-        agentColor: u.avatarColor || (agentId === 'agent-meera' ? '#7C3AED' : agentId === 'agent-rahul' ? '#2563EB' : agentId === 'agent-priya' ? '#059669' : '#2563EB'),
+        agentInitials: u.avatarInitials || (agentId === 'agent-meera' ? 'MK' : agentId === 'agent-rahul' ? 'RS' : 'PN'),
+        agentColor: u.avatarColor || (agentId === 'agent-meera' ? '#7C3AED' : agentId === 'agent-rahul' ? '#2563EB' : '#059669'),
         customerId: null,
       }));
       // Invalidate queries so dashboard & ticket views refresh
       queryClient.invalidateQueries();
     } catch (e) {
       console.warn('Failed to issue session cookie:', e);
+      setState((s) => ({ ...s, isSwitchingPersona: false }));
     }
   };
 
@@ -155,12 +174,17 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('arvo_actor_role', 'customer');
     localStorage.setItem('arvo_actor_id', customerId);
 
+    // Clear stale cached queries immediately
+    queryClient.clear();
+    setState((s) => ({ ...s, isSwitchingPersona: true }));
+
     try {
       const res = await loginDemoPersona(customerId);
       const u = res.user || {};
       setState((s) => ({
         ...s,
         isAuthenticated: true,
+        isSwitchingPersona: false,
         mode: 'customer',
         role: 'customer',
         isLead: false,
@@ -168,45 +192,55 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
         actorName: u.name || 'Vikram Patel',
         agentId: null,
         agentName: null,
-        agentInitials: u.avatarInitials || 'VP',
-        agentColor: u.avatarColor || '#D97706',
         customerId,
         customerName: u.name || 'Vikram Patel',
         customerCompany: u.company || 'Acme Corp',
+        customerInitials: u.avatarInitials || 'VP',
+        customerColor: u.avatarColor || '#DC2626',
       }));
       queryClient.invalidateQueries();
     } catch (e) {
       console.warn('Failed to issue customer session cookie:', e);
+      setState((s) => ({ ...s, isSwitchingPersona: false }));
     }
   };
 
   const loginWithEmail = async (email: string, password: string) => {
-    const res = await loginWithCredentials(email, password);
-    if (res.user) {
-      const u = res.user;
-      const isCust = u.role === 'customer';
-      localStorage.setItem('arvo_authenticated', 'true');
-      localStorage.setItem('arvo_actor_role', isCust ? 'customer' : 'agent');
-      localStorage.setItem('arvo_actor_id', u.userId);
-      setState((s) => ({
-        ...s,
-        isAuthenticated: true,
-        mode: isCust ? 'customer' : 'agent',
-        role: u.role,
-        isLead: u.role === 'lead',
-        actorId: u.userId,
-        actorName: u.name,
-        agentId: isCust ? null : u.userId,
-        agentName: isCust ? null : u.name,
-        agentInitials: u.avatarInitials || (u.userId === 'agent-meera' ? 'MK' : u.userId === 'agent-rahul' ? 'RS' : u.userId === 'agent-priya' ? 'PN' : 'VP'),
-        agentColor: u.avatarColor || (u.userId === 'agent-meera' ? '#7C3AED' : u.userId === 'agent-rahul' ? '#2563EB' : u.userId === 'agent-priya' ? '#059669' : '#D97706'),
-        customerId: isCust ? u.userId : null,
-        customerName: isCust ? u.name : 'Vikram Patel',
-        customerCompany: isCust ? (u.company || 'Acme Corp') : 'Acme Corp',
-      }));
-      queryClient.invalidateQueries();
+    queryClient.clear();
+    setState((s) => ({ ...s, isSwitchingPersona: true }));
+    try {
+      const res = await loginWithCredentials(email, password);
+      if (res.user) {
+        const u = res.user;
+        const isCust = u.role === 'customer';
+        localStorage.setItem('arvo_authenticated', 'true');
+        localStorage.setItem('arvo_actor_role', isCust ? 'customer' : 'agent');
+        localStorage.setItem('arvo_actor_id', u.userId);
+        setState((s) => ({
+          ...s,
+          isAuthenticated: true,
+          isSwitchingPersona: false,
+          mode: isCust ? 'customer' : 'agent',
+          role: u.role,
+          isLead: u.role === 'lead',
+          actorId: u.userId,
+          actorName: u.name,
+          agentId: isCust ? null : u.userId,
+          agentName: isCust ? null : u.name,
+          agentInitials: isCust ? (s.agentInitials || 'MK') : (u.avatarInitials || (u.userId === 'agent-meera' ? 'MK' : u.userId === 'agent-rahul' ? 'RS' : 'PN')),
+          agentColor: isCust ? (s.agentColor || '#7C3AED') : (u.avatarColor || (u.userId === 'agent-meera' ? '#7C3AED' : u.userId === 'agent-rahul' ? '#2563EB' : '#059669')),
+          customerId: isCust ? u.userId : null,
+          customerName: isCust ? u.name : 'Vikram Patel',
+          customerCompany: isCust ? (u.company || 'Acme Corp') : 'Acme Corp',
+          customerInitials: isCust ? (u.avatarInitials || 'VP') : 'VP',
+          customerColor: isCust ? (u.avatarColor || '#DC2626') : '#DC2626',
+        }));
+        queryClient.invalidateQueries();
+      }
+      return res.user;
+    } finally {
+      setState((s) => ({ ...s, isSwitchingPersona: false }));
     }
-    return res.user;
   };
 
   const logout = async () => {

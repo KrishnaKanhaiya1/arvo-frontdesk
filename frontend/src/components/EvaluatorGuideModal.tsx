@@ -159,7 +159,7 @@ export const EvaluatorGuideModal: React.FC<EvaluatorGuideProps> = ({
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-[var(--border)] bg-[var(--surface-subtle)] flex items-center justify-between text-xs text-[var(--muted)]">
-          <span>All 37 automated backend tests passing</span>
+          <span>All 40 automated backend tests passing (23 SLA + 17 Incidents & Concurrency)</span>
           <button
             onClick={() => {
               onClose();

@@ -34,14 +34,15 @@ export function formatTimeAgo(isoString: string): string {
   try {
     const d = new Date(isoString);
     const diffMs = Date.now() - d.getTime();
-    // If within 60 seconds (or slightly in the future due to client-server clock skew), display "Just now"
+    // If within 60 seconds (or slight clock skew), display "Just now"
     if (diffMs > -60000 && diffMs < 60000) {
       return 'Just now';
     }
-    // If past, format with suffix; if future by > 1 min, format cleanly
+    // If future by > 1 min (e.g. simulation clock set ahead or test seed), show exact IST timestamp
     if (diffMs <= -60000) {
-      return formatDistanceToNow(d, { addSuffix: false }) + ' ago';
+      return formatISTShort(isoString);
     }
+    // If in the past by > 1 min, format distance (e.g., "5 minutes ago", "2 hours ago")
     return formatDistanceToNow(d, { addSuffix: true });
   } catch {
     return isoString;

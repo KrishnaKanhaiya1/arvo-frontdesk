@@ -39,9 +39,12 @@ export const SLABadge: React.FC<SLABadgeProps> = ({
 
   const isPulsing = !sla.isPaused && !sla.resolution.met && (overallState === 'at-risk' || overallState === 'healthy' || overallState === 'breached');
 
+  const tooltip = `First Response (FR): ${sla.firstResponse.met ? 'Met' : sla.firstResponse.breached ? 'Breached' : `${formatMinutes(sla.firstResponse.remainingBusinessMinutes)} remaining`} (Target: ${sla.firstResponse.targetMinutes}m) | Resolution (RES): ${sla.resolution.met ? 'Met' : sla.resolution.breached ? 'Breached' : `${formatMinutes(sla.resolution.remainingBusinessMinutes)} remaining`} (Target: ${sla.resolution.targetMinutes}m)${sla.isPaused ? ` [PAUSED: ${sla.pauseReason || 'Off-Hours'}]` : ''}`;
+
   return (
     <div
       onClick={onClick}
+      title={tooltip}
       className={`inline-flex items-center gap-1.5 font-mono border rounded px-1.5 py-0.5 select-none transition-all ${
         size === 'sm' ? 'text-[11px] leading-tight font-medium' : 'text-xs px-2.5 py-1 font-semibold'
       } ${colors.bg} ${colors.text} ${colors.border} ${onClick ? 'cursor-pointer hover:opacity-85' : ''} ${className}`}
