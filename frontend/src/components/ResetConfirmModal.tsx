@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, RotateCcw, X, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
 
 interface ResetConfirmModalProps {
   isOpen: boolean;
@@ -23,7 +23,7 @@ export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3.5 mb-4">
-          <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 flex-shrink-0">
+          <div className="p-2.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 flex-shrink-0">
             <RotateCcw className="w-5 h-5" />
           </div>
           <div>
@@ -31,30 +31,33 @@ export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
               Reset Canonical Demo Data?
             </h3>
             <p className="text-xs text-[var(--muted)] mt-1 leading-relaxed">
-              This will restore all canonical tickets (ARV-101 through ARV-108), reset SLA timers, and re-establish the immutable audit triggers safely in-process.
+              This will restore all canonical tickets (ARV-101 through ARV-108), reset SLA timers, and re-establish the immutable PostgreSQL audit triggers safely in-process.
             </p>
           </div>
         </div>
 
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs mb-5 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <span>Any uncommitted test tickets created during this session will be permanently cleared.</span>
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-200 text-xs mb-5 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
+          <span>Any newly created test tickets will be cleared and restored to the canonical story baseline.</span>
         </div>
 
-        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[var(--border)]">
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
           <button
+            type="button"
             onClick={onClose}
             disabled={isPending}
-            className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface-subtle)] transition-colors"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={onConfirm}
             disabled={isPending}
-            className="px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow transition-colors flex items-center gap-1.5"
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/25 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
-            {isPending ? 'Restoring...' : 'Confirm Reset'}
+            <RotateCcw className={`w-3.5 h-3.5 ${isPending ? 'animate-spin' : ''}`} />
+            <span>{isPending ? 'Restoring…' : 'Confirm Reset'}</span>
           </button>
         </div>
       </div>

@@ -1,100 +1,146 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { usePersona } from '../hooks/usePersona';
 import { useNavigate } from 'react-router-dom';
-import { Users, LogIn, LogOut } from 'lucide-react';
+import { Users, LogOut, ChevronDown, UserCheck } from 'lucide-react';
 
 export const PersonaSwitcher: React.FC = () => {
-  const { mode, agentId, setAgentPersona, setCustomerPersona, logout } = usePersona();
+  const { mode, agentId, actorName, setAgentPersona, setCustomerPersona, logout } = usePersona();
   const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleAgentSelect = async (id: string) => {
+    setIsOpen(false);
     await setAgentPersona(id);
-    navigate('/');
+    navigate('/tickets/ARV-101');
   };
 
   const handleCustomerSelect = async () => {
+    setIsOpen(false);
     await setCustomerPersona();
     navigate('/customer');
   };
 
   const personas = [
-    { id: 'agent-meera', label: 'Meera (Lead)' },
-    { id: 'agent-rahul', label: 'Rahul' },
-    { id: 'agent-priya', label: 'Priya' },
+    { id: 'agent-meera', label: 'Meera Krishnan', title: 'Support Lead', color: '#7C3AED' },
+    { id: 'agent-rahul', label: 'Rahul Sharma', title: 'Support Agent', color: '#2563EB' },
+    { id: 'agent-priya', label: 'Priya Nair', title: 'Support Agent', color: '#059669' },
   ];
 
+  const currentLabel = mode === 'customer' 
+    ? 'Vikram (Customer)' 
+    : personas.find(p => p.id === agentId)?.label.split(' ')[0] || actorName || 'Meera';
+
   return (
-    <div className="flex items-center gap-1.5 sm:gap-2">
-      {/* Mobile Compact Persona Dropdown (< md) */}
-      <div className="flex md:hidden items-center">
-        <select
-          value={mode === 'customer' ? 'customer' : (agentId || 'agent-meera')}
-          onChange={(e) => {
-            const val = e.target.value;
-            if (val === 'customer') {
-              handleCustomerSelect();
-            } else {
-              handleAgentSelect(val);
-            }
-          }}
-          className="bg-[var(--surface-subtle)] text-[var(--content)] border border-[var(--border)] rounded-lg text-[11px] font-semibold py-1 px-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[115px] truncate cursor-pointer shadow-xs"
-          title="Switch Active Persona"
-        >
-          <option value="agent-meera">Meera (Lead)</option>
-          <option value="agent-rahul">Rahul (Agent)</option>
-          <option value="agent-priya">Priya (Agent)</option>
-          <option value="customer">Vikram (Customer)</option>
-        </select>
-      </div>
-
-      {/* Desktop Horizontal Switcher (md and up) */}
-      <div className="hidden md:flex items-center bg-[var(--surface-subtle)] p-0.5 rounded-lg border border-[var(--border)]">
-        {/* Agents */}
-        <div className="flex items-center gap-0.5">
-          {personas.map((p) => {
-            const isActive = mode === 'agent' && agentId === p.id;
-            return (
-              <button
-                key={p.id}
-                onClick={() => handleAgentSelect(p.id)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-[var(--surface)] text-[var(--content)] font-semibold shadow-xs ring-1 ring-black/5'
-                    : 'text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface)]/50'
-                }`}
-                title={`Switch session to ${p.label}`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-blue-600' : 'bg-transparent'}`} />
-                <span>{p.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="w-[1px] h-3.5 bg-[var(--border)] mx-1" />
-
-        {/* Customer Mode */}
-        <button
-          onClick={handleCustomerSelect}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
-            mode === 'customer'
-              ? 'bg-blue-600 text-white font-semibold shadow-xs'
-              : 'text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface)]/50'
-          }`}
-          title="Switch to customer portal (Vikram / ACME Corp)"
-        >
-          <Users className="w-3 h-3" />
-          <span>Customer Portal</span>
-        </button>
-      </div>
-
-      {/* Clean Single Sign Out Action */}
+    <div className="relative flex items-center gap-1.5" ref={dropdownRef}>
+      {/* Compact Switcher Pill */}
       <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] hover:bg-[var(--surface)] text-xs font-semibold text-[var(--content)] transition-all cursor-pointer shadow-xs whitespace-nowrap"
+        title="Demo: Switch Persona"
+      >
+        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+        <span className="text-[11px] font-mono text-[var(--muted)] hidden sm:inline">Demo:</span>
+        <span className="truncate max-w-[110px]">{currentLabel}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 transition-transform duration-150" style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }} />
+      </button>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1.5 w-60 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+          <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)] font-mono border-b border-[var(--border)] mb-1">
+            Demo Persona Switcher
+          </div>
+
+          <div className="space-y-0.5">
+            <div className="px-2.5 py-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 font-mono">
+              Support Staff (Internal)
+            </div>
+            {personas.map((p) => {
+              const isActive = mode === 'agent' && agentId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handleAgentSelect(p.id)}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold'
+                      : 'text-[var(--content)] hover:bg-[var(--surface-subtle)]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                    <div className="truncate">
+                      <div className="leading-tight">{p.label}</div>
+                      <div className="text-[10px] text-[var(--muted)] font-mono">{p.title}</div>
+                    </div>
+                  </div>
+                  {isActive && <span className="text-[10px] font-mono text-blue-600 font-bold shrink-0">Active</span>}
+                </button>
+              );
+            })}
+
+            <div className="px-2.5 pt-2 pb-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-mono border-t border-[var(--border)] mt-1">
+              Client Portal (Tenant Isolation)
+            </div>
+            <button
+              type="button"
+              onClick={handleCustomerSelect}
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left cursor-pointer ${
+                mode === 'customer'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold'
+                  : 'text-[var(--content)] hover:bg-[var(--surface-subtle)]'
+              }`}
+            >
+              <div className="flex items-center gap-2 truncate">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <div className="truncate">
+                  <div className="leading-tight">Vikram Patel</div>
+                  <div className="text-[10px] text-[var(--muted)] font-mono">Acme Corp Client</div>
+                </div>
+              </div>
+              {mode === 'customer' && <span className="text-[10px] font-mono text-emerald-600 font-bold shrink-0">Active</span>}
+            </button>
+          </div>
+
+          <div className="pt-1.5 mt-1 border-t border-[var(--border)]">
+            <button
+              type="button"
+              onClick={async () => {
+                setIsOpen(false);
+                await logout();
+                navigate('/login');
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone Sign Out Button */}
+      <button
+        type="button"
         onClick={async () => {
           await logout();
           navigate('/login');
         }}
-        className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-medium text-[var(--muted)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/40 border border-[var(--border)] transition-all cursor-pointer shadow-xs"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[var(--muted)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/40 border border-[var(--border)] transition-all cursor-pointer shadow-xs whitespace-nowrap"
         title="Sign out of Arvo Frontdesk"
       >
         <LogOut className="w-3.5 h-3.5" />

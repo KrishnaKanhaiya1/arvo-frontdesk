@@ -27,6 +27,14 @@ export type QueueFilter =
   | 'waiting'
   | 'resolved';
 
+function getActivePendingMinutes(sla: TicketSummary['sla']): number {
+  if (sla.isPaused) return Infinity;
+  if (!sla.firstResponse.met) {
+    return sla.firstResponse.breached ? -1000 : sla.firstResponse.remainingBusinessMinutes;
+  }
+  return sla.resolution.breached ? -500 : sla.resolution.remainingBusinessMinutes;
+}
+
 function sortBySLAUrgency(tickets: TicketSummary[]): TicketSummary[] {
   return [...tickets].sort((a, b) => {
     const aState = getSLAOverallState(a.sla);
@@ -37,11 +45,9 @@ function sortBySLAUrgency(tickets: TicketSummary[]): TicketSummary[] {
     if (rank[aState] !== rank[bState]) return rank[aState] - rank[bState];
 
     // Within same state sort by remaining time (closest deadline first)
-    if (aState !== 'paused') {
-      const aRemaining = a.sla.resolution.remainingBusinessMinutes;
-      const bRemaining = b.sla.resolution.remainingBusinessMinutes;
-      return aRemaining - bRemaining;
-    }
+    const aPending = getActivePendingMinutes(a.sla);
+    const bPending = getActivePendingMinutes(b.sla);
+    if (aPending !== bPending) return aPending - bPending;
 
     return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
   });
@@ -51,8 +57,15 @@ export const AgentWorkspace: React.FC = () => {
   const { ticketKey: urlTicketKey } = useParams<{ ticketKey: string }>();
   const navigate = useNavigate();
   const { agentId } = usePersona();
-
   const [selectedTicketKey, setSelectedTicketKey] = useState<string | null>(urlTicketKey || null);
+
+  useEffect(() => {
+    if (selectedTicketKey) {
+      document.title = `${selectedTicketKey} – Arvo Frontdesk`;
+    } else {
+      document.title = 'Agent Workspace – Arvo Frontdesk';
+    }
+  }, [selectedTicketKey]);
   const [activeQueue, setActiveQueue] = useState<QueueFilter>('all');
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -260,7 +273,7 @@ export const AgentWorkspace: React.FC = () => {
         {/* ── Zone 2, 3, 4: Rails & Panels ── */}
         <div className="flex flex-1 overflow-hidden">
           {/* Zone 2: 260px Operational Queue Navigation Rail */}
-          <div className="hidden lg:flex w-[260px] flex-shrink-0">
+          <div className="hidden lg:flex w-[240px] flex-shrink-0">
             <LeftRail
               activeQueue={activeQueue}
               onQueueChange={handleQueueFilter}

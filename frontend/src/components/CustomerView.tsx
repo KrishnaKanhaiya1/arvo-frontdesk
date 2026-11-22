@@ -30,6 +30,7 @@ import { useCustomerTickets, useCustomerTicket, useCustomerReply, useCustomerReo
 import { usePersona } from '../hooks/usePersona';
 import { useTheme } from '../hooks/useTheme';
 import { NewTicketDialog } from './NewTicketDialog';
+import { PersonaSwitcher } from './PersonaSwitcher';
 import {
   getStatusColors,
   getStatusLabel,
@@ -86,6 +87,19 @@ export const CustomerView: React.FC = () => {
   const customerReply = useCustomerReply(selectedKey || '');
   const customerReopen = useCustomerReopen(selectedKey || '');
   const createTicket = useCreateTicket();
+
+  // Auto-select first ticket if none selected to avoid wasted empty space
+  React.useEffect(() => {
+    if (!selectedKey && tickets.length > 0) {
+      setSelectedKey(tickets[0].ticketKey);
+      navigate(`/customer/tickets/${tickets[0].ticketKey}`, { replace: true });
+    }
+  }, [tickets, selectedKey, navigate]);
+
+  // Dynamic document title
+  React.useEffect(() => {
+    document.title = selectedKey ? `${selectedKey} – Customer Portal` : 'Customer Portal – Arvo Frontdesk';
+  }, [selectedKey]);
 
   // Restore saved drafts when switching ticket
   React.useEffect(() => {
@@ -208,18 +222,8 @@ export const CustomerView: React.FC = () => {
             {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
           </button>
 
-          {/* Switch to Agent Workspace */}
-          <button
-            onClick={async () => {
-              await setAgentPersona('agent-meera');
-              navigate('/tickets/ARV-101');
-            }}
-            className="p-1.5 sm:px-3 sm:py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Switch to Agent Console"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Agent Workspace</span>
-          </button>
+          {/* Demo Persona Switcher (For evaluators to test multi-tenancy) */}
+          <PersonaSwitcher />
 
           {/* Customer Avatar */}
           <div
@@ -456,7 +460,7 @@ export const CustomerView: React.FC = () => {
                     </span>
                   )}
                   <div className="ml-auto">
-                    <SLABadge sla={ticket.sla} size="sm" />
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${getPriorityColors(ticket.priority)}`}>{ticket.priority} Priority</span>
                   </div>
                 </div>
                 <h1 className="text-base font-bold text-[var(--content)] font-['Archivo',sans-serif]">{ticket.subject}</h1>
@@ -745,7 +749,7 @@ const CustomerTicketRow: React.FC<{
           {getStatusLabel(ticket.status)}
         </span>
         <div className="ml-auto">
-          <SLABadge sla={ticket.sla} size="sm" showLabel={false} />
+          <span className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded border ${getPriorityColors(ticket.priority)}`}>{ticket.priority}</span>
         </div>
       </div>
       <div className="text-xs font-semibold text-[var(--content)] truncate">{ticket.subject}</div>

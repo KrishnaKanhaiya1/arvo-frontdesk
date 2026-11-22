@@ -143,8 +143,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ ticketKey }) => 
               </span>
             </div>
             <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--muted)] font-mono">
-              <span>CAS Version:</span>
-              <span className="font-semibold text-[var(--content)]">v{ticket.version}</span>
+              <span title="Optimistic concurrency control version to prevent dual claims (INC-0291)">CAS Version:</span>
+              <span className="font-semibold text-[var(--content)] bg-[var(--surface-subtle)] px-1.5 py-0.5 rounded border border-[var(--border)]">
+                v{ticket.version}
+              </span>
             </div>
           </div>
 
@@ -154,8 +156,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ ticketKey }) => 
               Requester Profile
             </div>
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center">
-                {ticket.customerName.slice(0, 2).toUpperCase()}
+              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800">
+                {ticket.customerName
+                  ? ticket.customerName.trim().split(/\s+/).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+                  : 'CU'}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-semibold text-[var(--content)] truncate">{ticket.customerName}</div>
