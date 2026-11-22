@@ -35,6 +35,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<RootRedirect />} />
+        <Route path="/tickets" element={<AgentWorkspace />} />
         <Route path="/tickets/:ticketKey" element={<AgentWorkspace />} />
         <Route path="/customer" element={<CustomerView />} />
         <Route path="/customer/tickets/:ticketKey" element={<CustomerView />} />

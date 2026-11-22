@@ -66,8 +66,8 @@ export const CustomerView: React.FC = () => {
     }
   }, [role, setCustomerPersona]);
 
-  // Use the session customerId or fallback to 'cust-acme'
-  const activeCustomerId = currentCustomerId || 'cust-acme';
+  // Use the session customerId (empty string falls back gracefully to session-derived customer on server)
+  const activeCustomerId = currentCustomerId || '';
 
   const [selectedKey, setSelectedKey] = useState<string | null>(urlTicketKey || null);
   const [replyText, setReplyText] = useState('');
@@ -712,7 +712,7 @@ export const CustomerView: React.FC = () => {
       {/* New Customer Support Ticket Dialog */}
       {showNewTicketModal && (
         <NewTicketDialog
-          defaultCustomerId={activeCustomerId}
+          defaultCustomerId={activeCustomerId || undefined}
           onClose={() => setShowNewTicketModal(false)}
           onSuccess={(ticketKey) => {
             if (ticketKey) handleSelectTicket(ticketKey);

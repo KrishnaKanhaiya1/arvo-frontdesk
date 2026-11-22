@@ -116,8 +116,10 @@ export function useCustomers() {
 export function useCustomerTickets(customerId: string | null) {
   return useQuery({
     queryKey: ['customer-tickets', customerId],
-    queryFn: () => apiFetch<TicketSummary[]>(`/api/customer/tickets?customerId=${customerId}`),
-    enabled: !!customerId,
+    queryFn: () => {
+      const endpoint = customerId ? `/api/customer/tickets?customerId=${encodeURIComponent(customerId)}` : '/api/customer/tickets';
+      return apiFetch<TicketSummary[]>(endpoint);
+    },
     staleTime: 10_000,
     refetchInterval: 15_000,
   });

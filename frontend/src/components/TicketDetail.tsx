@@ -465,9 +465,9 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {!isAssignedToMe && !isUnassigned && (
+                  {!isAssignedToMe && (
                     <span className="text-[10px] text-[#D97706] font-medium">
-                      Claim ticket to reply
+                      {isUnassigned ? 'Claim ticket to reply' : 'Owned by another agent'}
                     </span>
                   )}
                   <div className="relative" ref={dropdownRef}>

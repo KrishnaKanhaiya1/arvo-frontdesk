@@ -77,8 +77,10 @@ export const AgentWorkspace: React.FC = () => {
     if (urlTicketKey && urlTicketKey !== selectedTicketKey) {
       setSelectedTicketKey(urlTicketKey);
       setMobileTab('detail');
+    } else if (!urlTicketKey && !selectedTicketKey && allTickets.length > 0) {
+      setSelectedTicketKey(allTickets[0].ticketKey);
     }
-  }, [urlTicketKey]);
+  }, [urlTicketKey, allTickets, selectedTicketKey]);
 
   // Global Command Palette Shortcut (⌘K / Ctrl+K)
   useEffect(() => {
