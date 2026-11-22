@@ -95,16 +95,24 @@ async function run() {
   await client.send('Page.enable');
   await client.send('DOM.enable');
 
+  // Set desktop viewport 1280x800 for full multi-pane experience
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 1280,
+    height: 800,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+
   const results = {};
 
   // ─────────────────────────────────────────────────────────────
   // TEST 1: Unauthenticated Deep Link (/tickets/ARV-102)
   // ─────────────────────────────────────────────────────────────
   console.log('\n--- Test 1: Unauthenticated Deep Link ---');
-  await client.eval(`
+  await client.eval(`(() => {
     localStorage.clear();
     sessionStorage.clear();
-  `);
+  })()`);
   await client.send('Network.clearBrowserCookies');
 
   console.log('Navigating directly to unauthenticated deep link /tickets/ARV-102...');
@@ -121,12 +129,10 @@ async function run() {
 
   // Log in as Lead Meera Krishnan using quick demo card
   console.log('Clicking 1-Click Lead Demo card...');
-  await client.eval(`
+  await client.eval(`(() => {
     const meeraBtn = document.querySelector('button[title*="Meera Krishnan"]');
-    if (meeraBtn) {
-      meeraBtn.click();
-    }
-  `);
+    if (meeraBtn) meeraBtn.click();
+  })()`);
   await client.sleep(4000);
 
   const urlAfterLogin = await client.eval('window.location.href');
@@ -142,43 +148,43 @@ async function run() {
   await client.send('Page.navigate', { url: 'https://arvo-frontdesk.vercel.app/tickets/ARV-106' });
   await client.sleep(3500);
 
-  const ticketTitle = await client.eval(`
-    document.querySelector('h2')?.innerText || ''
-  `);
+  const ticketTitle = await client.eval(`(() => {
+    return document.querySelector('h2')?.innerText || '';
+  })()`);
   console.log('Ticket loaded on ARV-106:', ticketTitle);
 
   // Look for "Take Over Ticket" button
-  const hasTakeOverBtn = await client.eval(`
-    Array.from(document.querySelectorAll('button')).some(b => b.innerText.includes('Take Over Ticket'))
-  `);
+  const hasTakeOverBtn = await client.eval(`(() => {
+    return Array.from(document.querySelectorAll('button')).some(b => b.innerText.includes('Take Over Ticket'));
+  })()`);
   console.log('Has Take Over Ticket button:', hasTakeOverBtn);
 
   if (hasTakeOverBtn) {
     console.log('Clicking Take Over Ticket button...');
-    await client.eval(`
+    await client.eval(`(() => {
       const b = Array.from(document.querySelectorAll('button')).find(x => x.innerText.includes('Take Over Ticket'));
       if (b) b.click();
-    `);
-    await client.sleep(1000);
+    })()`);
+    await client.sleep(1200);
 
-    const hasConfirmModal = await client.eval(`
-      document.body.innerText.includes('Confirm Ticket Takeover') &&
-      document.body.innerText.includes('Are you sure you want to take over ownership?')
-    `);
+    const hasConfirmModal = await client.eval(`(() => {
+      return document.body.innerText.includes('Confirm Ticket Takeover') &&
+             document.body.innerText.includes('Are you sure you want to take over ownership?');
+    })()`);
     console.log('Takeover confirmation modal appeared:', hasConfirmModal);
     results.test2_modal_appeared = hasConfirmModal;
     await client.screenshot('02_takeover_confirmation_modal.png');
 
     console.log('Clicking Confirm Takeover in modal...');
-    await client.eval(`
+    await client.eval(`(() => {
       const confirmBtn = Array.from(document.querySelectorAll('button')).find(x => x.innerText === 'Confirm Takeover');
       if (confirmBtn) confirmBtn.click();
-    `);
+    })()`);
     await client.sleep(3500);
 
-    const currentAssignee = await client.eval(`
-      document.body.innerText.includes('Meera Krishnan')
-    `);
+    const currentAssignee = await client.eval(`(() => {
+      return document.body.innerText.includes('Meera Krishnan');
+    })()`);
     console.log('Ticket successfully reassigned to Meera:', currentAssignee);
     results.test2_reassigned = currentAssignee;
     await client.screenshot('02_takeover_confirmed_success.png');
@@ -188,9 +194,9 @@ async function run() {
   // TEST 3: CSV Queue Export (MIN-02)
   // ─────────────────────────────────────────────────────────────
   console.log('\n--- Test 3: Export Queue (CSV) ---');
-  const hasCsvBtn = await client.eval(`
-    Array.from(document.querySelectorAll('button')).some(b => b.innerText.includes('CSV'))
-  `);
+  const hasCsvBtn = await client.eval(`(() => {
+    return Array.from(document.querySelectorAll('button')).some(b => b.innerText.includes('CSV'));
+  })()`);
   console.log('CSV Export button present in queue header:', hasCsvBtn);
   results.test3_has_csv_export = hasCsvBtn;
   await client.screenshot('03_csv_export_cta_present.png');
@@ -200,10 +206,10 @@ async function run() {
   // ─────────────────────────────────────────────────────────────
   console.log('\n--- Test 4: Interactive Holiday Management ---');
   // Open Demo Clock Popover
-  await client.eval(`
+  await client.eval(`(() => {
     const clockBtn = Array.from(document.querySelectorAll('button')).find(b => b.title && b.title.includes('Simulation Clock'));
     if (clockBtn) clockBtn.click();
-  `);
+  })()`);
   await client.sleep(1000);
 
   const popoverContent = await client.eval(`document.body.innerText`);
@@ -211,22 +217,22 @@ async function run() {
   console.log('Daemon status visible in popover:', hasDaemonStatus);
   results.test4_has_daemon_status = hasDaemonStatus;
 
-  const hasAddHolidayBtn = await client.eval(`
-    Array.from(document.querySelectorAll('button')).some(b => b.innerText.includes('Add Holiday'))
-  `);
+  const hasAddHolidayBtn = await client.eval(`(() => {
+    return Array.from(document.querySelectorAll('button')).some(b => b.innerText.includes('Add Holiday'));
+  })()`);
   console.log('Has Add Holiday button:', hasAddHolidayBtn);
   results.test4_has_add_holiday_btn = hasAddHolidayBtn;
 
   if (hasAddHolidayBtn) {
     console.log('Opening Add Holiday form...');
-    await client.eval(`
-      const b = Array.from(document.querySelectorAll('button')).find(x => x.innerText.includes('Add Holiday'));
-      if (b) b.click();
-    `);
+    await client.eval(`(() => {
+      const addBtn = Array.from(document.querySelectorAll('button')).find(x => x.innerText.includes('Add Holiday'));
+      if (addBtn) addBtn.click();
+    })()`);
     await client.sleep(500);
 
     // Type name and date with native setter
-    await client.eval(`
+    await client.eval(`(() => {
       function setReactValue(input, val) {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
         setter.call(input, val);
@@ -237,29 +243,29 @@ async function run() {
       const dateInput = document.querySelector('input[type="date"]');
       if (nameInput) setReactValue(nameInput, 'National Innovation Festival');
       if (dateInput) setReactValue(dateInput, '2026-12-25');
-    `);
+    })()`);
     await client.sleep(500);
 
     console.log('Submitting new holiday...');
-    await client.eval(`
+    await client.eval(`(() => {
       const saveBtn = Array.from(document.querySelectorAll('button')).find(x => x.innerText === 'Save');
       if (saveBtn) saveBtn.click();
-    `);
+    })()`);
     await client.sleep(3000);
 
-    const holidayPresent = await client.eval(`
-      document.body.innerText.includes('National Innovation Festival')
-    `);
+    const holidayPresent = await client.eval(`(() => {
+      return document.body.innerText.includes('National Innovation Festival');
+    })()`);
     console.log('Newly added holiday is rendered in UI:', holidayPresent);
     results.test4_holiday_added = holidayPresent;
     await client.screenshot('04_holiday_added_interactive.png');
 
     // Delete the holiday via trash button
     console.log('Deleting holiday via trash button...');
-    await client.eval(`
+    await client.eval(`(() => {
       const trashBtns = Array.from(document.querySelectorAll('button[title*="Remove holiday"]'));
       if (trashBtns.length > 0) trashBtns[trashBtns.length - 1].click();
-    `);
+    })()`);
     await client.sleep(3000);
     await client.screenshot('04_holiday_deleted_restored.png');
   }
@@ -271,10 +277,10 @@ async function run() {
   await client.send('Page.navigate', { url: 'https://arvo-frontdesk.vercel.app/operational-black-hole-999' });
   await client.sleep(2500);
 
-  const is404Page = await client.eval(`
-    document.body.innerText.includes('HTTP 404 · NOT FOUND') &&
-    document.body.innerText.includes('Destination Unreachable')
-  `);
+  const is404Page = await client.eval(`(() => {
+    return document.body.innerText.includes('HTTP 404 · NOT FOUND') &&
+           document.body.innerText.includes('Destination Unreachable');
+  })()`);
   console.log('Dedicated 404 page rendered:', is404Page);
   results.test5_dedicated_404 = is404Page;
   await client.screenshot('05_branded_404_page.png');
