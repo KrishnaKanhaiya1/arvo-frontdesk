@@ -45,6 +45,31 @@ export function verifySignedCookie(signedValue: string): string | null {
 }
 
 /**
+ * Hashes a plain password using crypto.scryptSync with a cryptographically secure random salt.
+ */
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+/**
+ * Verifies a plain password against a stored scrypt hash using constant-time comparison.
+ */
+export function verifyPassword(password: string, storedHash: string): boolean {
+  try {
+    const [salt, hash] = storedHash.split(':');
+    if (!salt || !hash) return false;
+    const hashBuffer = Buffer.from(hash, 'hex');
+    const testBuffer = crypto.scryptSync(password, salt, 64);
+    if (hashBuffer.length !== testBuffer.length) return false;
+    return crypto.timingSafeEqual(hashBuffer, testBuffer);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * In-memory sliding window rate limiter for authentication endpoints
  * 10 attempts per minute per IP.
  */

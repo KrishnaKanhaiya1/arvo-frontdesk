@@ -3,7 +3,7 @@ import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { ERROR_CODES } from '../types/contracts';
-import { signCookie, verifySignedCookie, checkLoginRateLimit, DEMO_PASSWORD } from '../utils/security';
+import { signCookie, verifySignedCookie, checkLoginRateLimit, DEMO_PASSWORD, hashPassword, verifyPassword } from '../utils/security';
 
 const router = Router();
 
@@ -99,17 +99,17 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     }
 
     const { email, password } = LoginSchema.parse(req.body);
-
-    // 2. Strict password validation — NO fallback to 'admin' or 'password'
-    if (password !== DEMO_PASSWORD) {
-      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
-    }
-
     const cleanEmail = email.trim().toLowerCase();
 
-    // 3. Search Agent
+    // 2. Search Agent
     const agent = await prisma.agent.findUnique({ where: { email: cleanEmail } });
     if (agent) {
+      const isDemoPass = password === DEMO_PASSWORD;
+      const isCustomPass = agent.passwordHash ? verifyPassword(password, agent.passwordHash) : false;
+      if (!isDemoPass && !isCustomPass) {
+        throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
+      }
+
       const user: SessionPayload = {
         userId: agent.id,
         role: agent.role as 'lead' | 'agent',
@@ -132,9 +132,15 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       });
     }
 
-    // 4. Search Customer
+    // 3. Search Customer
     const customer = await prisma.customer.findUnique({ where: { email: cleanEmail } });
     if (customer) {
+      const isDemoPass = password === DEMO_PASSWORD;
+      const isCustomPass = customer.passwordHash ? verifyPassword(password, customer.passwordHash) : false;
+      if (!isDemoPass && !isCustomPass) {
+        throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
+      }
+
       const user: SessionPayload = {
         userId: customer.id,
         role: 'customer',
@@ -288,6 +294,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
         name: name.trim(),
         email: cleanEmail,
         company: company.trim(),
+        passwordHash: hashPassword(password),
         avatarColor,
         avatarInitials,
       },

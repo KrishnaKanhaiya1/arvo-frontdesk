@@ -17,6 +17,7 @@ model Agent {
   name           String
   email          String   @unique
   role           String   @default("agent") // 'lead' | 'agent'
+  passwordHash   String?  @map("password_hash")
   avatarColor    String   @default("#2563EB")
   avatarInitials String   @default("??")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -35,6 +36,7 @@ model Customer {
   name           String
   email          String   @unique
   company        String
+  passwordHash   String?  @map("password_hash")
   avatarColor    String   @default("#059669")
   avatarInitials String   @default("??")
   createdAt      DateTime @default(now()) @map("created_at")
