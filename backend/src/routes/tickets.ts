@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import prisma from '../utils/prisma';
+import { generateNextTicketKey } from '../utils/ticketKey';
 import { getCurrentTime } from '../services/clock';
 import { computeSLAState } from '../services/slaCompute';
 import {
@@ -187,12 +188,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     const resolutionTarget = calculateInitialResolutionTarget(currentTime, body.priority, holidays);
 
     const ticket = await prisma.$transaction(async (tx) => {
-      // Auto-increment counter
-      const counter = await tx.ticketCounter.update({
-        where: { id: 'singleton' },
-        data: { counter: { increment: 1 } },
-      });
-      const ticketKey = `ARV-${counter.counter}`;
+      const ticketKey = await generateNextTicketKey(tx);
 
       const newTicket = await tx.ticket.create({
         data: {

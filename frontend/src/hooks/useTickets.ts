@@ -151,7 +151,7 @@ export function useCreateTicket() {
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Ticket created successfully');
     },
-    onError: () => toast.error('Failed to create ticket'),
+    onError: (err: any) => toast.error(err?.message || 'Failed to create ticket'),
   });
 }
 
