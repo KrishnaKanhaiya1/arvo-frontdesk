@@ -168,10 +168,10 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen overflow-x-hidden bg-[var(--surface-subtle)] px-3 py-4 sm:px-6 lg:px-10 flex items-center justify-center transition-colors duration-200">
       <main className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl w-full items-center justify-center">
         {/* Floating Card Container */}
-        <div className="relative flex w-full flex-col overflow-y-auto lg:overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_35px_90px_-45px_rgba(15,23,42,0.45)] lg:grid lg:min-h-[740px] lg:grid-cols-[0.92fr_1.08fr]">
+        <div className="relative flex w-full flex-col overflow-y-auto lg:overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_35px_90px_-45px_rgba(15,23,42,0.45)] lg:grid lg:min-h-[700px] lg:grid-cols-[0.92fr_1.08fr]">
           
           {/* Header Bar Spanning Across Top of Card */}
-          <header className="relative lg:absolute inset-x-0 top-0 z-30 flex h-20 lg:h-24 items-center justify-between px-6 sm:px-10 lg:px-12 border-b lg:border-0 border-[var(--border)]/40">
+          <header className="relative lg:absolute inset-x-0 top-0 z-30 flex h-20 lg:h-22 items-center justify-between px-6 sm:px-10 lg:px-12 border-b lg:border-0 border-[var(--border)]/40">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center font-bold text-base sm:text-lg tracking-wider text-white shadow-md shadow-blue-500/25">
                 A
@@ -225,7 +225,7 @@ export const LoginPage: React.FC = () => {
           </header>
 
           {/* Left Form Section */}
-          <section className="relative z-20 flex flex-col justify-center px-6 pb-8 pt-5 lg:pt-28 sm:px-12 lg:min-h-[740px] lg:px-16">
+          <section className="relative z-20 flex flex-col justify-start lg:justify-center overflow-y-auto max-h-[calc(100vh-2rem)] lg:max-h-[820px] px-6 pb-8 pt-5 lg:pt-22 sm:px-10 lg:px-14 scrollbar-thin">
             <div className="w-full max-w-md mx-auto lg:mx-0">
               
               {/* Active Session Reconnect Alert if already logged in */}
@@ -245,7 +245,7 @@ export const LoginPage: React.FC = () => {
               )}
 
               {/* Auth Mode Toggle (Sign In vs Create Customer Account) */}
-              <div className="flex items-center p-1 bg-[var(--surface-subtle)] border border-[var(--border)] rounded-xl mb-5">
+              <div className="flex items-center p-1 bg-[var(--surface-subtle)] border border-[var(--border)] rounded-xl mb-4">
                 <button
                   type="button"
                   onClick={() => { setAuthMode('signin'); setErrorMsg(null); }}
@@ -272,14 +272,14 @@ export const LoginPage: React.FC = () => {
 
               {authMode === 'signin' ? (
                 <>
-                  <div className="mb-5">
-                    <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 font-mono flex items-center gap-1.5">
+                  <div className="mb-4">
+                    <div className="mb-1 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 font-mono flex items-center gap-1.5">
                       <Lock className="w-3.5 h-3.5" /> SECURE SIGN IN
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-extrabold text-[var(--content)] tracking-tight font-['Archivo',sans-serif]">
                       Welcome back
                     </h2>
-                    <p className="mt-1 text-xs sm:text-sm text-[var(--muted)]">
+                    <p className="mt-0.5 text-xs sm:text-sm text-[var(--muted)]">
                       Enter your approved account details to continue.
                     </p>
                   </div>
@@ -293,9 +293,9 @@ export const LoginPage: React.FC = () => {
                   )}
 
                   {/* Credentials Form */}
-                  <form onSubmit={handleSubmit} className="space-y-4">
+                  <form onSubmit={handleSubmit} className="space-y-3.5">
                     <div>
-                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1 font-mono">
                         Email
                       </label>
                       <div className="relative">
@@ -313,7 +313,7 @@ export const LoginPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1 font-mono">
                         Password
                       </label>
                       <div className="relative">
@@ -345,7 +345,7 @@ export const LoginPage: React.FC = () => {
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </button>
 
-                    <div className="pt-1 text-center text-xs text-[var(--muted)]">
+                    <div className="pt-0.5 text-center text-xs text-[var(--muted)]">
                       First-time user or new client organization?{' '}
                       <button
                         type="button"
@@ -359,65 +359,67 @@ export const LoginPage: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <div className="mb-5">
-                    <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1.5">
+                  <div className="mb-3">
+                    <div className="mb-1 text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1.5">
                       <UserPlus className="w-3.5 h-3.5" /> CLIENT ONBOARDING
                     </div>
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-[var(--content)] tracking-tight font-['Archivo',sans-serif]">
+                    <h2 className="text-xl sm:text-2xl font-extrabold text-[var(--content)] tracking-tight font-['Archivo',sans-serif]">
                       Create Account
                     </h2>
-                    <p className="mt-1 text-xs sm:text-sm text-[var(--muted)]">
+                    <p className="mt-0.5 text-xs text-[var(--muted)]">
                       Register your organization to access the Arvo Customer Portal.
                     </p>
                   </div>
 
                   {/* Error Alert */}
                   {errorMsg && (
-                    <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 px-3.5 py-2.5 text-xs text-red-700 dark:text-red-300">
+                    <div className="mb-3 flex items-start gap-2.5 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 px-3.5 py-2 text-xs text-red-700 dark:text-red-300">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                       <span>{errorMsg}</span>
                     </div>
                   )}
 
                   {/* Registration Form */}
-                  <form onSubmit={handleRegister} className="space-y-3.5">
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
-                        Full Name
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={regName}
-                          onChange={(e) => setRegName(e.target.value)}
-                          placeholder="e.g. Aditi Sen"
-                          required
-                          autoFocus
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
-                        />
-                        <User className="w-4 h-4 text-[var(--muted)] absolute right-3.5 top-3.5 pointer-events-none" />
+                  <form onSubmit={handleRegister} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase text-[var(--content)] mb-1 font-mono">
+                          Full Name
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={regName}
+                            onChange={(e) => setRegName(e.target.value)}
+                            placeholder="e.g. Aditi Sen"
+                            required
+                            autoFocus
+                            className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-sm font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-3 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
+                          />
+                          <User className="w-3.5 h-3.5 text-[var(--muted)] absolute right-3 top-2.5 pointer-events-none" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase text-[var(--content)] mb-1 font-mono">
+                          Company / Org
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={regCompany}
+                            onChange={(e) => setRegCompany(e.target.value)}
+                            placeholder="e.g. Acme Labs"
+                            required
+                            className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-sm font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-3 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
+                          />
+                          <Building2 className="w-3.5 h-3.5 text-[var(--muted)] absolute right-3 top-2.5 pointer-events-none" />
+                        </div>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
-                        Company / Organization
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={regCompany}
-                          onChange={(e) => setRegCompany(e.target.value)}
-                          placeholder="e.g. Acme Innovations Ltd"
-                          required
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
-                        />
-                        <Building2 className="w-4 h-4 text-[var(--muted)] absolute right-3.5 top-3.5 pointer-events-none" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                      <label className="block text-[11px] font-bold uppercase text-[var(--content)] mb-1 font-mono">
                         Work Email
                       </label>
                       <div className="relative">
@@ -427,14 +429,14 @@ export const LoginPage: React.FC = () => {
                           onChange={(e) => setRegEmail(e.target.value)}
                           placeholder="you@company.in"
                           required
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-sm font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-3 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
                         />
-                        <Mail className="w-4 h-4 text-[var(--muted)] absolute right-3.5 top-3.5 pointer-events-none" />
+                        <Mail className="w-3.5 h-3.5 text-[var(--muted)] absolute right-3 top-2.5 pointer-events-none" />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                      <label className="block text-[11px] font-bold uppercase text-[var(--content)] mb-1 font-mono">
                         Password
                       </label>
                       <div className="relative">
@@ -442,37 +444,39 @@ export const LoginPage: React.FC = () => {
                           type={showPassword ? 'text' : 'password'}
                           value={regPassword}
                           onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="Create a password (min 6 chars)"
+                          placeholder="Create password (min 6 chars)"
                           required
                           minLength={6}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs pr-10"
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-sm font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-3 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs pr-9"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3.5 top-3.5 text-[var(--muted)] hover:text-[var(--content)] cursor-pointer"
+                          className="absolute right-3 top-2 text-[var(--muted)] hover:text-[var(--content)] cursor-pointer"
                           title={showPassword ? 'Hide password' : 'Show password'}
                         >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         </button>
                       </div>
                     </div>
 
-                    {/* Enterprise Notice */}
-                    <div className="p-3 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/40 text-[11px] text-blue-900 dark:text-blue-200 leading-relaxed">
-                      <strong>Enterprise RBAC Note:</strong> Support Agent & Lead roles are restricted to internal staff provisioned by Arvo Systems IT. New client organizations can self-register here to submit and track support tickets.
-                    </div>
-
+                    {/* Prominent Primary Submit Button Immediately Below Inputs */}
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl font-semibold text-sm text-white bg-emerald-600 hover:bg-emerald-700 active:translate-y-px disabled:opacity-50 transition-all shadow-md shadow-emerald-500/20 cursor-pointer group"
+                      className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 active:translate-y-px disabled:opacity-50 transition-all shadow-md shadow-blue-500/25 cursor-pointer group mt-1"
                     >
-                      <span>{isSubmitting ? 'Creating Account...' : 'Create Account & Launch Portal'}</span>
+                      <span>{isSubmitting ? 'Creating Account & Launching...' : 'Create Account & Launch Portal'}</span>
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </button>
 
-                    <div className="pt-1 text-center text-xs text-[var(--muted)]">
+                    {/* Compact Enterprise RBAC Notice */}
+                    <div className="flex items-start gap-2 p-2 rounded-xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/30 text-[11px] text-blue-900 dark:text-blue-200 leading-snug">
+                      <ShieldCheck className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                      <span><strong>Enterprise RBAC Note:</strong> Support Agent & Lead roles are IT-provisioned. Client organizations self-register here to submit and track support tickets.</span>
+                    </div>
+
+                    <div className="pt-0.5 text-center text-xs text-[var(--muted)]">
                       Already have an account?{' '}
                       <button
                         type="button"
@@ -486,89 +490,93 @@ export const LoginPage: React.FC = () => {
                 </>
               )}
 
-              {/* Evaluator Quick-Access Accounts with Demo Credentials */}
-              <div id="evaluator-credentials" className="mt-5 pt-4 border-t border-[var(--border)]">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)] font-mono mb-2 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-blue-600" /> Evaluator Quick-Access (PW: arvo2026)
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill('meera@arvo.systems')}
-                    disabled={isSubmitting}
-                    className="p-2 text-left rounded-xl border border-[var(--border)] hover:border-purple-500 bg-[var(--surface-subtle)] hover:bg-purple-50/20 transition-all group cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-[var(--content)] group-hover:text-purple-600 dark:group-hover:text-purple-400">
-                        Meera (Lead)
+              {/* Evaluator Quick-Access Accounts and Highlights (Shown in Sign-In Mode) */}
+              {authMode === 'signin' && (
+                <>
+                  <div id="evaluator-credentials" className="mt-5 pt-4 border-t border-[var(--border)]">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)] font-mono mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <UserCheck className="w-3.5 h-3.5 text-blue-600" /> Evaluator Quick-Access (PW: arvo2026)
                       </span>
-                      <span className="w-2 h-2 rounded-full bg-purple-500" />
                     </div>
-                    <div className="text-[10px] text-[var(--muted)] font-mono truncate">meera@arvo.systems</div>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill('rahul@arvo.systems')}
-                    disabled={isSubmitting}
-                    className="p-2 text-left rounded-xl border border-[var(--border)] hover:border-blue-500 bg-[var(--surface-subtle)] hover:bg-blue-50/20 transition-all group cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-[var(--content)] group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                        Rahul (Agent)
-                      </span>
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickFill('meera@arvo.systems')}
+                        disabled={isSubmitting}
+                        className="p-2 text-left rounded-xl border border-[var(--border)] hover:border-purple-500 bg-[var(--surface-subtle)] hover:bg-purple-50/20 transition-all group cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-[var(--content)] group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                            Meera (Lead)
+                          </span>
+                          <span className="w-2 h-2 rounded-full bg-purple-500" />
+                        </div>
+                        <div className="text-[10px] text-[var(--muted)] font-mono truncate">meera@arvo.systems</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleQuickFill('rahul@arvo.systems')}
+                        disabled={isSubmitting}
+                        className="p-2 text-left rounded-xl border border-[var(--border)] hover:border-blue-500 bg-[var(--surface-subtle)] hover:bg-blue-50/20 transition-all group cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-[var(--content)] group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                            Rahul (Agent)
+                          </span>
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        </div>
+                        <div className="text-[10px] text-[var(--muted)] font-mono truncate">rahul@arvo.systems</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleQuickFill('priya@arvo.systems')}
+                        disabled={isSubmitting}
+                        className="p-2 text-left rounded-xl border border-[var(--border)] hover:border-emerald-500 bg-[var(--surface-subtle)] hover:bg-emerald-50/20 transition-all group cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-[var(--content)] group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                            Priya (Agent)
+                          </span>
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        </div>
+                        <div className="text-[10px] text-[var(--muted)] font-mono truncate">priya@arvo.systems</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleQuickFill('vikram@acmecorp.in')}
+                        disabled={isSubmitting}
+                        className="p-2 text-left rounded-xl border border-[var(--border)] hover:border-amber-500 bg-[var(--surface-subtle)] hover:bg-amber-50/20 transition-all group cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-[var(--content)] group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                            Vikram (Customer)
+                          </span>
+                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        </div>
+                        <div className="text-[10px] text-[var(--muted)] font-mono truncate">vikram@acmecorp.in</div>
+                      </button>
                     </div>
-                    <div className="text-[10px] text-[var(--muted)] font-mono truncate">rahul@arvo.systems</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill('priya@arvo.systems')}
-                    disabled={isSubmitting}
-                    className="p-2 text-left rounded-xl border border-[var(--border)] hover:border-emerald-500 bg-[var(--surface-subtle)] hover:bg-emerald-50/20 transition-all group cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-[var(--content)] group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
-                        Priya (Agent)
-                      </span>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    </div>
-                    <div className="text-[10px] text-[var(--muted)] font-mono truncate">priya@arvo.systems</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill('vikram@acmecorp.in')}
-                    disabled={isSubmitting}
-                    className="p-2 text-left rounded-xl border border-[var(--border)] hover:border-amber-500 bg-[var(--surface-subtle)] hover:bg-amber-50/20 transition-all group cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-[var(--content)] group-hover:text-amber-600 dark:group-hover:text-amber-400">
-                        Vikram (Customer)
-                      </span>
-                      <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    </div>
-                    <div className="text-[10px] text-[var(--muted)] font-mono truncate">vikram@acmecorp.in</div>
-                  </button>
-                </div>
-              </div>
-
-              {/* 3 Highlights at the bottom (Exact Reference 2 Layout) */}
-              <div className="mt-5 grid gap-2 sm:grid-cols-3">
-                {highlights.map(({ icon: Icon, label, color }) => (
-                  <div
-                    key={label}
-                    className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2.5"
-                  >
-                    <Icon className={`h-4 w-4 shrink-0 ${color}`} />
-                    <span className="text-[11px] font-bold leading-4 text-[var(--muted)]">{label}</span>
                   </div>
-                ))}
-              </div>
+
+                  {/* 3 Highlights at the bottom (Exact Reference 2 Layout) */}
+                  <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                    {highlights.map(({ icon: Icon, label, color }) => (
+                      <div
+                        key={label}
+                        className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2.5"
+                      >
+                        <Icon className={`h-4 w-4 shrink-0 ${color}`} />
+                        <span className="text-[11px] font-bold leading-4 text-[var(--muted)]">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </section>
 
