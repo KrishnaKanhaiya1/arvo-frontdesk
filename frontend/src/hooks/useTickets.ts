@@ -96,18 +96,22 @@ export function useSystemClock() {
 
 // Agents
 export function useAgents() {
+  const isAgent = typeof window !== 'undefined' && localStorage.getItem('arvo_authenticated') === 'true' && localStorage.getItem('arvo_actor_role') !== 'customer';
   return useQuery({
     queryKey: ['agents'],
     queryFn: () => apiFetch<Agent[]>('/api/agents'),
+    enabled: isAgent,
     staleTime: 60_000,
   });
 }
 
 // Customers
 export function useCustomers() {
+  const isAgent = typeof window !== 'undefined' && localStorage.getItem('arvo_authenticated') === 'true' && localStorage.getItem('arvo_actor_role') !== 'customer';
   return useQuery({
     queryKey: ['customers'],
     queryFn: () => apiFetch<Customer[]>('/api/customers'),
+    enabled: isAgent,
     staleTime: 60_000,
   });
 }

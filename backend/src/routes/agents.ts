@@ -1,7 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../utils/prisma';
+import { requireAgentRole } from '../middleware/auth';
 
 const router = Router();
+router.use(requireAgentRole);
 
 // ── GET /api/agents ───────────────────────────────────────────
 router.get('/agents', async (_req: Request, res: Response, next: NextFunction) => {

@@ -4,7 +4,7 @@
  */
 
 import { format } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 import {
   calculateBusinessMinutesBetween,
   addBusinessMinutes,
@@ -130,5 +130,5 @@ export function computeSLAState(
 }
 
 function formatIST(d: Date): string {
-  return toZonedTime(d, TZ).toISOString().replace('Z', '+05:30');
+  return formatInTimeZone(d, TZ, "yyyy-MM-dd'T'HH:mm:ss.SSSxxx");
 }

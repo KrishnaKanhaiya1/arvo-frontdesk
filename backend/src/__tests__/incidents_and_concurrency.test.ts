@@ -27,6 +27,12 @@ async function fetchSessionCookie(personaId: string): Promise<string> {
 }
 
 beforeAll(async () => {
+  // Safety guard: prevent accidental wiping of production database
+  const dbUrl = process.env.DATABASE_URL || '';
+  if (dbUrl.includes('render.com') || dbUrl.includes('neon.tech') || dbUrl.includes('supabase.com')) {
+    throw new Error('SAFETY ABORT: Refusing to run destructive test suite against remote production database! Please use a local PostgreSQL instance or dedicated test database.');
+  }
+
   // 1. Ensure server is listening
   try {
     const res = await fetch(`${BASE_URL}/api/health`, { signal: AbortSignal.timeout(500) });

@@ -1,4 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { startOfDay } from 'date-fns';
 import prisma from '../utils/prisma';
 import { getCurrentTime } from '../services/clock';
 import { computeSLAState } from '../services/slaCompute';
@@ -30,8 +32,9 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
     let resolvedToday = 0;
     let totalActive = activeTickets.length;
 
-    const today = currentTime;
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    // Accurate IST midnight start of today
+    const istNow = toZonedTime(currentTime, 'Asia/Kolkata');
+    const istTodayStart = fromZonedTime(startOfDay(istNow), 'Asia/Kolkata');
 
     for (const ticket of activeTickets) {
       const sla = computeSLAState(ticket, currentTime, holidays);
@@ -52,11 +55,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
       if (ticket.status === 'WAITING_ON_CUSTOMER') waitingOnCustomer++;
       if (!ticket.assigneeId) unassigned++;
 
-      if (
-        ticket.status === 'RESOLVED' &&
-        ticket.resolvedAt &&
-        ticket.resolvedAt >= todayStart
-      ) {
+      if (ticket.resolvedAt && ticket.resolvedAt >= istTodayStart) {
         resolvedToday++;
       }
     }

@@ -279,13 +279,15 @@ router.post('/:key/claim', async (req: Request, res: Response, next: NextFunctio
         throw new AppError(409, ERROR_CODES.VERSION_MISMATCH, 'Ticket was modified by another agent. Please refresh.');
       }
 
+      const effectiveAgentId = req.auth?.actorId || body.agentId;
+
       // Check ownership
-      const isTakeover = !!(ticket.assigneeId && ticket.assigneeId !== body.agentId);
+      const isTakeover = !!(ticket.assigneeId && ticket.assigneeId !== effectiveAgentId);
       if (isTakeover && !body.allowTakeover) {
         throw new AppError(409, ERROR_CODES.CONFLICT, 'Ticket has already been claimed by another agent.');
       }
 
-      const agent = await tx.agent.findUnique({ where: { id: body.agentId } });
+      const agent = await tx.agent.findUnique({ where: { id: effectiveAgentId } });
       if (!agent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Agent not found');
 
       // ATOMIC COMPARE-AND-SWAP CONDITIONAL UPDATE:

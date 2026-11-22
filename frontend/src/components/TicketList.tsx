@@ -34,30 +34,36 @@ export const TicketList: React.FC<TicketListProps> = ({
       'Resolution Breached',
       'Resolution Deadline',
     ];
+    const sanitizeCell = (val: string) => {
+      let str = (val || '').replace(/"/g, '""');
+      if (/^[=+\-@]/.test(str)) str = "'" + str;
+      return `"${str}"`;
+    };
+
     const rows = tickets.map(t => [
-      `"${t.ticketKey}"`,
-      `"${(t.customerName ? t.subject : t.subject || '').replace(/"/g, '""')}"`,
-      t.priority,
-      t.status,
-      `"${(t.customerName || '').replace(/"/g, '""')}"`,
-      `"${(t.customerCompany || '').replace(/"/g, '""')}"`,
-      `"${(t.assigneeName || 'Unassigned').replace(/"/g, '""')}"`,
-      `"${t.createdAt}"`,
+      sanitizeCell(t.ticketKey),
+      sanitizeCell(t.subject || ''),
+      sanitizeCell(t.priority),
+      sanitizeCell(t.status),
+      sanitizeCell(t.customerName || ''),
+      sanitizeCell(t.customerCompany || ''),
+      sanitizeCell(t.assigneeName || 'Unassigned'),
+      sanitizeCell(t.createdAt),
       t.sla?.firstResponse?.breached ? 'YES' : 'NO',
-      `"${t.sla?.firstResponse?.deadlineIST || ''}"`,
+      sanitizeCell(t.sla?.firstResponse?.deadlineIST || ''),
       t.sla?.resolution?.breached ? 'YES' : 'NO',
-      `"${t.sla?.resolution?.deadlineIST || ''}"`,
+      sanitizeCell(t.sla?.resolution?.deadlineIST || ''),
     ]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `arvo_queue_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (

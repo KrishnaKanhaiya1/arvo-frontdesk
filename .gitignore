@@ -7,3 +7,5 @@ dist/
 backend/prisma/*.js
 backend/prisma/*.d.ts
 backend/prisma/*.map
+scratch/
+top_percent_evidence/

@@ -209,6 +209,22 @@ export const DemoClockPopover: React.FC = () => {
                     <div className="text-[10px] text-[var(--muted)] font-mono">Near business close</div>
                   </button>
                   <button
+                    onClick={() => handleSetPreset('2026-11-22T04:30:00.000Z')}
+                    disabled={setClock.isPending}
+                    className="px-2.5 py-2 border border-[var(--border)] rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-[var(--content)] font-medium text-left transition-colors cursor-pointer"
+                  >
+                    <div className="font-semibold text-xs">Sun 10:00 AM</div>
+                    <div className="text-[10px] text-[var(--muted)] font-mono">Weekend zero-SLA proof</div>
+                  </button>
+                  <button
+                    onClick={() => handleSetPreset('2026-11-23T04:30:00.000Z')}
+                    disabled={setClock.isPending}
+                    className="px-2.5 py-2 border border-[var(--border)] rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-[var(--content)] font-medium text-left transition-colors cursor-pointer"
+                  >
+                    <div className="font-semibold text-xs">Mon 10:00 AM</div>
+                    <div className="text-[10px] text-[var(--muted)] font-mono">Next workday arrival</div>
+                  </button>
+                  <button
                     onClick={() => handleAdvanceWorkDays(6)}
                     disabled={setClock.isPending}
                     className="px-2.5 py-2 border border-[var(--border)] rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-[var(--content)] font-medium text-left transition-colors cursor-pointer"

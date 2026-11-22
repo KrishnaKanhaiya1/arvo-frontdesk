@@ -25,6 +25,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
+  'https://arvo-frontdesk.vercel.app',
   process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
@@ -46,7 +47,7 @@ app.use(
       if (
         origin.startsWith('http://localhost:') ||
         origin.startsWith('http://127.0.0.1:') ||
-        origin.endsWith('.vercel.app') ||
+        origin === 'https://arvo-frontdesk.vercel.app' ||
         (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) ||
         allowedOrigins.includes(origin)
       ) {
@@ -66,7 +67,7 @@ app.use((req, res, next) => {
       const isAllowed =
         origin.startsWith('http://localhost:') ||
         origin.startsWith('http://127.0.0.1:') ||
-        origin.endsWith('.vercel.app') ||
+        origin === 'https://arvo-frontdesk.vercel.app' ||
         (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) ||
         allowedOrigins.includes(origin);
       if (!isAllowed) {

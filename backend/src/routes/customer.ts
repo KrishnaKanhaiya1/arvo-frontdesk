@@ -641,20 +641,7 @@ router.post('/tickets/follow-up', async (req: Request, res: Response, next: Next
     if (!customer) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Customer profile not found');
 
     const result = await prisma.$transaction(async (tx) => {
-      // Find highest ticket number
-      const allTickets = await tx.ticket.findMany({
-        select: { ticketKey: true },
-        orderBy: { createdAt: 'desc' },
-      });
-      let maxNum = 100;
-      for (const t of allTickets) {
-        const match = t.ticketKey.match(/^ARV-(\d+)$/);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (num > maxNum) maxNum = num;
-        }
-      }
-      const newKey = `ARV-${maxNum + 1}`;
+      const newKey = await generateNextTicketKey(tx);
 
       const frTargetMins = SLA_TARGETS[body.priority].firstResponseMinutes;
       const resTargetMins = calculateInitialResolutionTarget(currentTime, body.priority, holidays);

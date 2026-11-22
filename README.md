@@ -73,7 +73,7 @@ The application features a real credentials authentication system (`POST /api/au
 | :--- | :--- | :--- | :--- | :--- |
 | **Meera Krishnan** | Support Lead | `meera@arvo.systems` | `arvo2026` | Full triage, lead-only reassignment, demo clock override, auto-close cron trigger |
 | **Rahul Sharma** | Tier 2 Agent | `rahul@arvo.systems` | `arvo2026` | Incident claims, customer public replies, private internal notes, audit trail |
-| **Priya Patel** | Tier 1 Agent | `priya@arvo.systems` | `arvo2026` | Ticket triage, claims, communication, resolution workflows |
+| **Priya Nair** | Tier 1 Agent | `priya@arvo.systems` | `arvo2026` | Ticket triage, claims, communication, resolution workflows |
 | **Vikram Patel** | Customer (Acme Corp) | `vikram@acmecorp.in` | `arvo2026` | Customer portal, verified status tracking, 5-day reopen, linked follow-up tickets |
 
 *Evaluators can also click **"Direct Demo Launch"** in the top navigation bar to immediately launch the Lead Workspace with zero typing.*
@@ -106,8 +106,8 @@ The frontend is engineered as an enterprise-grade command center with focused op
 
 * **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons, TanStack Query v5, React Router v7, Sonner Toast.
 * **Backend:** Node.js, TypeScript, Express, Prisma ORM, Zod, cookie-parser (HTTP-only session cookies), node-cron, date-fns & date-fns-tz.
-* **Database:** PostgreSQL (Neon Serverless PostgreSQL in cloud; local PostgreSQL supported).
-* **Testing:** Vitest unit test suite validating all SLA boundary mathematics.
+* **Database:** PostgreSQL (Hosted on Render Postgres in cloud; local PostgreSQL supported).
+* **Testing:** Vitest unit & integration test suite (43 passing tests) validating all SLA boundary mathematics and concurrency guards.
 
 ---
 
@@ -116,7 +116,7 @@ The frontend is engineered as an enterprise-grade command center with focused op
 ### Prerequisites
 * **Node.js:** v18.0.0 or higher (v20+ recommended)
 * **npm:** v9.0.0 or higher
-* **PostgreSQL:** Local instance or free [Neon](https://neon.tech) serverless database URL.
+* **PostgreSQL:** Local instance or remote database URL.
 
 ### 1. Clone & Install Dependencies
 ```bash
@@ -137,7 +137,7 @@ cd ..
 In `backend/.env`:
 ```env
 PORT=3001
-DATABASE_URL="postgresql://username:password@ep-xyz.us-east-2.aws.neon.tech/arvo_frontdesk?sslmode=require"
+DATABASE_URL="postgresql://username:password@localhost:5432/arvo_frontdesk"
 NODE_ENV=development
 ```
 
@@ -154,13 +154,13 @@ npm run prisma:seed
 ```
 *Seeds 3 agents (Meera, Rahul, Priya), 4 customers, 21 Indian festival holidays for 2026, and the 8 canonical test tickets (ARV-101 through ARV-108).*
 
-### 4. Run the Automated Test Suite (40 Passing Tests)
+### 4. Run the Automated Test Suite (43 Passing Tests)
 ```bash
 cd backend
 npm run test
 ```
-*Executes all 40 Vitest test cases across two specialized suites:*
-1. **`sla.test.ts` (23 tests):** Validating business hour boundaries, Friday 6 PM $\rightarrow$ Sunday morning zero-clock rules, holiday skipping, mid-flight escalations, same-day critical resolution mathematics, auto-close, and reopen windows.
+*Executes all 43 Vitest test cases across two specialized suites:*
+1. **`sla.test.ts` (26 tests):** Validating business hour boundaries, Friday 6 PM $\rightarrow$ Sunday morning zero-clock rules, Critical resolution deadlines (same day if $\ge$120m left, else next working day close), holiday skipping, mid-flight escalations, auto-close, and reopen windows.
 2. **`incidents_and_concurrency.test.ts` (17 tests):** Validating:
    * **Authentication & Authorization Guard:** Unauthenticated requests receive `401 Unauthorized`; header spoofing without signed session cookies receives `401 Unauthorized`; customers attempting agent endpoints or private notes receive `403 Forbidden`; customer query-parameter or body ID tampering receives `403 Forbidden`.
    * **INC-0291 Atomic CAS Race Condition Prevention:** Simultaneous atomic claims return `[200, 409]` (`VERSION_MISMATCH` / `CONFLICT`), verified under concurrent Promise execution.

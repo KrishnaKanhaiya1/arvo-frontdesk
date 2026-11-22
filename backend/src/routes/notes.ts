@@ -59,7 +59,8 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     const ticket = await prisma.ticket.findUnique({ where: { ticketKey: key } });
     if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
 
-    const agent = await prisma.agent.findUnique({ where: { id: body.agentId } });
+    const effectiveAgentId = req.auth?.actorId || body.agentId;
+    const agent = await prisma.agent.findUnique({ where: { id: effectiveAgentId } });
     if (!agent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Agent not found');
 
     const note = await prisma.$transaction(async (tx) => {
@@ -67,7 +68,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         data: {
           ticketId: ticket.id,
           content: body.content,
-          authorId: body.agentId,
+          authorId: effectiveAgentId,
           authorName: agent.name,
           createdAt: currentTime,
         },
@@ -78,11 +79,11 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: AuditAction.INTERNAL_NOTE_ADDED,
-          actorId: body.agentId,
+          actorId: effectiveAgentId,
           actorName: agent.name,
           actorType: 'agent',
-          metadata: { noteId: created.id },
-          createdAt: currentTime,
+          metadata: { noteId: created.id, simulatedAt: currentTime.toISOString() },
+          createdAt: new Date(),
         },
       });
 

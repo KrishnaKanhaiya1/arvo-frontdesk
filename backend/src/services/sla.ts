@@ -304,15 +304,23 @@ export function calculateResolutionDeadline(
   const ist = toZonedTime(createdAt, TZ);
 
   if (priority === 'CRITICAL') {
-    // If during business hours on a working day: deadline is 18:30 IST TODAY.
+    // If during business hours on a working day:
+    // "Fix it the same working day" -> 18:30 IST today, UNLESS less than the first-response
+    // window (120 business minutes, i.e., arrival after 16:30 IST) remains today.
+    // In that case (e.g. Friday 18:00), the fix deadline is close of the NEXT working day (18:30 IST)
+    // so the fix deadline never expires before the initial response window.
     if (isWorkingDay(ist, holidaySet)) {
       const close = dayCloseZoned(ist);
       if (isBefore(ist, close)) {
-        return fromZonedTime(close, TZ);
+        const effectiveStart = isBefore(ist, dayOpenZoned(ist)) ? dayOpenZoned(ist) : ist;
+        const minsLeftToday = differenceInMinutes(close, effectiveStart);
+        if (minsLeftToday >= 120) {
+          return fromZonedTime(close, TZ);
+        }
       }
     }
 
-    // Created after close, on weekend, or on a holiday:
+    // Created after 16:30, after close, on weekend, or on a holiday:
     // Applicable working day is the next working day; deadline is 18:30 IST on that day.
     let cursor = addDays(startOfDay(ist), 1);
     for (let i = 0; i < 366; i++) {
@@ -344,5 +352,5 @@ export function calculateInitialResolutionTarget(
     ? createdAt
     : getNextBusinessOpen(createdAt, holidays);
   const minutes = calculateBusinessMinutesBetween(effectiveStart, deadline, holidays);
-  return Math.max(minutes, 30);
+  return Math.max(minutes, 120);
 }

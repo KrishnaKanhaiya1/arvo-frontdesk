@@ -3,7 +3,7 @@ import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { ERROR_CODES } from '../types/contracts';
-import { signCookie, verifySignedCookie, checkLoginRateLimit, DEMO_PASSWORD, hashPassword, verifyPassword } from '../utils/security';
+import { signCookie, verifySignedCookie, isRateLimited, recordFailedLogin, clearLoginFailures, DEMO_PASSWORD, hashPassword, verifyPassword } from '../utils/security';
 
 const router = Router();
 
@@ -36,15 +36,32 @@ const DemoLoginSchema = z.object({
   personaId: z.string().min(1),
 });
 
+// Explicit canonical demo IDs permitted for 1-click evaluator login
+const ALLOWED_DEMO_IDS = new Set([
+  'agent-meera',
+  'agent-rahul',
+  'agent-priya',
+  'cust-acme',
+  'cust-global',
+  'cust-nova',
+  'cust-zenith',
+]);
+
 /**
  * GET /api/auth/demo-personas
- * Returns publicly available evaluator quick-access demo accounts.
+ * Returns strictly the pre-provisioned demo accounts for evaluator quick-access.
+ * Self-registered customer accounts are NEVER exposed here.
  */
 router.get('/demo-personas', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const [agents, customers] = await Promise.all([
-      prisma.agent.findMany({ orderBy: { name: 'asc' } }),
-      prisma.customer.findMany({ orderBy: { name: 'asc' } }),
+      prisma.agent.findMany({
+        where: { id: { in: ['agent-meera', 'agent-rahul', 'agent-priya'] } },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.customer.findMany({
+        where: { id: 'cust-acme' },
+      }),
     ]);
 
     const demoProfiles = [
@@ -81,34 +98,36 @@ router.get('/demo-personas', async (_req: Request, res: Response, next: NextFunc
 
 /**
  * POST /api/auth/login
- * Real credentials authentication for Agents & Customers
- * Protected with sliding-window IP rate limiting (10 req/min).
+ * Real credentials authentication for Agents & Customers.
+ * Protected with sliding-window IP rate limiting (10 failed attempts/min).
  */
 router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // 1. Rate limiting check
     const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
-    const rateCheck = checkLoginRateLimit(clientIp);
+    const rateCheck = isRateLimited(clientIp);
     if (!rateCheck.allowed) {
       res.setHeader('Retry-After', String(rateCheck.retryAfterSec || 60));
       throw new AppError(
         429,
         ERROR_CODES.RATE_LIMITED || 'TOO_MANY_REQUESTS',
-        `Too many login attempts. Please wait ${rateCheck.retryAfterSec || 60} seconds before retrying.`
+        `Too many failed login attempts. Please wait ${rateCheck.retryAfterSec || 60} seconds before retrying.`
       );
     }
 
     const { email, password } = LoginSchema.parse(req.body);
     const cleanEmail = email.trim().toLowerCase();
 
-    // 2. Search Agent
+    // 1. Search Agent
     const agent = await prisma.agent.findUnique({ where: { email: cleanEmail } });
     if (agent) {
       const isDemoPass = password === DEMO_PASSWORD;
       const isCustomPass = agent.passwordHash ? verifyPassword(password, agent.passwordHash) : false;
       if (!isDemoPass && !isCustomPass) {
+        recordFailedLogin(clientIp);
         throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
       }
+
+      clearLoginFailures(clientIp);
 
       const user: SessionPayload = {
         userId: agent.id,
@@ -122,7 +141,6 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
 
       const serialized = JSON.stringify(user);
       const signed = signCookie(serialized);
-
       res.cookie(COOKIE_NAME, signed, getCookieOptions());
 
       return res.json({
@@ -132,26 +150,18 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       });
     }
 
-    // 3. Search Customer
+    // 2. Search Customer
     const customer = await prisma.customer.findUnique({ where: { email: cleanEmail } });
     if (customer) {
-      const isDemoPass = password === DEMO_PASSWORD;
+      const isDemoPass = (customer.id.startsWith('cust-') && password === DEMO_PASSWORD);
       let isCustomPass = customer.passwordHash ? verifyPassword(password, customer.passwordHash) : false;
 
-      // Self-healing: if an account registered before the password hash column migration (has null passwordHash and custom UUID id),
-      // allow initial login with their entered password (min 6 chars) and persist the scrypt hash immediately.
-      if (!isDemoPass && !isCustomPass && !customer.passwordHash && !customer.id.startsWith('cust-') && password.length >= 6) {
-        const newHash = hashPassword(password);
-        await prisma.customer.update({
-          where: { id: customer.id },
-          data: { passwordHash: newHash },
-        });
-        isCustomPass = true;
-      }
-
       if (!isDemoPass && !isCustomPass) {
+        recordFailedLogin(clientIp);
         throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
       }
+
+      clearLoginFailures(clientIp);
 
       const user: SessionPayload = {
         userId: customer.id,
@@ -165,7 +175,6 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
 
       const serialized = JSON.stringify(user);
       const signed = signCookie(serialized);
-
       res.cookie(COOKIE_NAME, signed, getCookieOptions());
 
       return res.json({
@@ -175,7 +184,7 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       });
     }
 
-    // Generic error to prevent account enumeration
+    recordFailedLogin(clientIp);
     throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -188,22 +197,16 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
 
 /**
  * POST /api/auth/demo-login
- * Issues an HTTP-only, SameSite session cookie for pre-provisioned demo personas.
+ * Issues a session cookie for pre-provisioned demo personas.
+ * Exempt from rate-limiting for smooth evaluator switching.
  */
 router.post('/demo-login', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
-    const rateCheck = checkLoginRateLimit(clientIp);
-    if (!rateCheck.allowed) {
-      res.setHeader('Retry-After', String(rateCheck.retryAfterSec || 60));
-      throw new AppError(
-        429,
-        ERROR_CODES.RATE_LIMITED || 'TOO_MANY_REQUESTS',
-        `Rate limit exceeded. Please wait ${rateCheck.retryAfterSec || 60} seconds.`
-      );
-    }
-
     const { personaId } = DemoLoginSchema.parse(req.body);
+
+    if (!ALLOWED_DEMO_IDS.has(personaId)) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, `Unauthorized demo login persona '${personaId}'.`);
+    }
 
     // 1. Check if agent
     const agent = await prisma.agent.findUnique({ where: { id: personaId } });
@@ -220,7 +223,6 @@ router.post('/demo-login', async (req: Request, res: Response, next: NextFunctio
 
       const serialized = JSON.stringify(user);
       const signed = signCookie(serialized);
-
       res.cookie(COOKIE_NAME, signed, getCookieOptions());
 
       return res.json({
@@ -245,7 +247,6 @@ router.post('/demo-login', async (req: Request, res: Response, next: NextFunctio
 
       const serialized = JSON.stringify(user);
       const signed = signCookie(serialized);
-
       res.cookie(COOKIE_NAME, signed, getCookieOptions());
 
       return res.json({

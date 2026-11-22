@@ -21,7 +21,7 @@ router.get('/', requireAgentRole, async (req: Request, res: Response, next: Next
 
     const entries = await prisma.auditLog.findMany({
       where: { ticketId: ticket.id },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
 
     const data = entries.map((e) => ({

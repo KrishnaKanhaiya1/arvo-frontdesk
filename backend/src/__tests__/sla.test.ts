@@ -5,6 +5,8 @@ import {
   addBusinessMinutes,
   getNextBusinessOpen,
   calculateSLADeadline,
+  calculateResolutionDeadline,
+  calculateInitialResolutionTarget,
 } from '../services/sla';
 import { SLA_TARGETS, TicketPriority, AUTO_CLOSE_MINUTES, REOPEN_WINDOW_MINUTES } from '../types/contracts';
 
@@ -96,6 +98,47 @@ describe('SLA Business Hours Engine', () => {
       // Friday 18:00 to 18:30 = 30 minutes. Saturday/Sunday = 0. Monday 09:30 to 10:00 = 30 minutes.
       // Total = 60 minutes
       expect(minutes).toBe(60);
+    });
+
+    it('Critical resolution on Friday 18:00 sets deadline to next working day close (Monday 18:30 IST) and is NOT breached on Sunday', () => {
+      const fri6pm = new Date('2026-11-20T12:30:00Z'); // Friday 18:00 IST
+      const sun10am = new Date('2026-11-22T04:30:00Z'); // Sunday 10:00 IST
+
+      const deadline = calculateResolutionDeadline(fri6pm, 'CRITICAL', 540, testHolidays);
+      
+      // Expected deadline is Monday 2026-11-23 18:30 IST = 13:00:00Z
+      expect(deadline.toISOString()).toBe('2026-11-23T13:00:00.000Z');
+
+      const target = calculateInitialResolutionTarget(fri6pm, 'CRITICAL', testHolidays);
+      // Friday 18:00-18:30 (30m) + Monday full day (540m) = 570m
+      expect(target).toBe(570);
+
+      // On Sunday morning, only 30 minutes have elapsed, remaining = 540m, NOT breached!
+      const elapsedOnSunday = calculateBusinessMinutesBetween(fri6pm, sun10am, testHolidays);
+      expect(elapsedOnSunday).toBe(30);
+      expect(elapsedOnSunday < target).toBe(true);
+    });
+
+    it('Critical resolution on Tuesday 17:00 (<120m left in day) sets deadline to Wednesday 18:30 IST', () => {
+      const tue5pm = new Date('2026-11-17T11:30:00Z'); // Tuesday 17:00 IST
+      const deadline = calculateResolutionDeadline(tue5pm, 'CRITICAL', 540, testHolidays);
+      
+      // Expected deadline is Wednesday 2026-11-18 18:30 IST = 13:00:00Z
+      expect(deadline.toISOString()).toBe('2026-11-18T13:00:00.000Z');
+      const target = calculateInitialResolutionTarget(tue5pm, 'CRITICAL', testHolidays);
+      // Tuesday 17:00-18:30 (90m) + Wednesday full day (540m) = 630m
+      expect(target).toBe(630);
+    });
+
+    it('Critical resolution on Monday 10:00 (>=120m left in day) sets deadline to same day close (Monday 18:30 IST)', () => {
+      const mon10am = new Date('2026-11-16T04:30:00Z'); // Monday 10:00 IST
+      const deadline = calculateResolutionDeadline(mon10am, 'CRITICAL', 540, testHolidays);
+      
+      // Expected deadline is Monday 2026-11-16 18:30 IST = 13:00:00Z
+      expect(deadline.toISOString()).toBe('2026-11-16T13:00:00.000Z');
+      const target = calculateInitialResolutionTarget(mon10am, 'CRITICAL', testHolidays);
+      // Monday 10:00-18:30 = 510m
+      expect(target).toBe(510);
     });
   });
 

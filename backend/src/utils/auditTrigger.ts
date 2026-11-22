@@ -1,15 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function installAuditImmutabilityTrigger(prisma: PrismaClient) {
-  // PostgreSQL prepared statements must execute one command per invocation
+  // PostgreSQL trigger strictly prohibiting UPDATE and DELETE operations on audit_log
   await prisma.$executeRawUnsafe(`
     CREATE OR REPLACE FUNCTION prevent_audit_log_modification()
     RETURNS TRIGGER AS $$
     BEGIN
-      IF current_setting('app.allow_audit_cleanup', true) = 'on' THEN
-        RETURN OLD;
-      END IF;
-      RAISE EXCEPTION 'Audit log entries are immutable and append-only. UPDATE and DELETE operations are forbidden at the database layer (INC-0318).';
+      RAISE EXCEPTION 'Audit log entries are immutable and append-only. UPDATE and DELETE operations are strictly forbidden at the database layer (INC-0318).';
     END;
     $$ LANGUAGE plpgsql;
   `);

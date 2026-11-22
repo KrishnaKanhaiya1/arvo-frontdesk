@@ -57,9 +57,9 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
       actorId: isAuth ? savedId : '',
       actorName: isCustomer 
         ? 'Vikram Patel' 
-        : (savedId === 'agent-meera' ? 'Meera Krishnan' : savedId === 'agent-rahul' ? 'Rahul Sharma' : 'Priya Patel'),
+        : (savedId === 'agent-meera' ? 'Meera Krishnan' : savedId === 'agent-rahul' ? 'Rahul Sharma' : 'Priya Nair'),
       agentId: isAuth && !isCustomer ? savedId : null,
-      agentName: isAuth && !isCustomer ? (savedId === 'agent-meera' ? 'Meera Krishnan' : savedId === 'agent-rahul' ? 'Rahul Sharma' : 'Priya Patel') : null,
+      agentName: isAuth && !isCustomer ? (savedId === 'agent-meera' ? 'Meera Krishnan' : savedId === 'agent-rahul' ? 'Rahul Sharma' : 'Priya Nair') : null,
       agentInitials: savedId === 'agent-rahul' ? 'RS' : savedId === 'agent-priya' ? 'PN' : 'MK',
       agentColor: savedId === 'agent-rahul' ? '#2563EB' : savedId === 'agent-priya' ? '#059669' : '#7C3AED',
       customerId: isAuth && isCustomer ? savedId : null,

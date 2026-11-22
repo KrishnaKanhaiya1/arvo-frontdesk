@@ -1,36 +1,26 @@
 import { Prisma } from '@prisma/client';
 
 /**
- * Robust, collision-free Ticket Key generator.
- * Inspects all existing ticket keys in the database, extracts numeric suffixes,
- * and increments beyond both the max existing ticket key and the singleton counter.
+ * Concurrency-safe, atomic monotonic Ticket Key generator.
+ * Employs row-level locking via PostgreSQL `UPDATE ... RETURNING` on the singleton counter table,
+ * ensuring parallel ticket creations never collide or produce duplicate keys (ADR-006).
  */
 export async function generateNextTicketKey(tx: Prisma.TransactionClient): Promise<string> {
-  const existingTickets = await tx.ticket.findMany({
-    select: { ticketKey: true },
-  });
+  // Ensure the singleton row exists
+  await tx.$executeRawUnsafe(`
+    INSERT INTO "ticket_counter" (id, counter)
+    VALUES ('singleton', (SELECT COALESCE(MAX(CAST(SUBSTRING("ticketKey" FROM 5) AS INTEGER)), 100) FROM "ticket"))
+    ON CONFLICT (id) DO NOTHING;
+  `);
 
-  let maxNum = 100;
-  for (const t of existingTickets) {
-    const match = t.ticketKey.match(/^ARV-(\d+)$/);
-    if (match) {
-      const n = parseInt(match[1], 10);
-      if (n > maxNum) maxNum = n;
-    }
-  }
+  // Atomic row lock & increment in one statement
+  const rows: any = await tx.$queryRawUnsafe(`
+    UPDATE "ticket_counter"
+    SET counter = GREATEST(counter, (SELECT COALESCE(MAX(CAST(SUBSTRING("ticketKey" FROM 5) AS INTEGER)), 100) FROM "ticket")) + 1
+    WHERE id = 'singleton'
+    RETURNING counter;
+  `);
 
-  const currentCounter = await tx.ticketCounter.findUnique({
-    where: { id: 'singleton' },
-  });
-
-  const baseNum = Math.max(maxNum, currentCounter?.counter ?? 100);
-  const nextNum = baseNum + 1;
-
-  await tx.ticketCounter.upsert({
-    where: { id: 'singleton' },
-    create: { id: 'singleton', counter: nextNum },
-    update: { counter: nextNum },
-  });
-
-  return `ARV-${nextNum}`;
+  const counterVal = rows?.[0]?.counter ?? 101;
+  return `ARV-${counterVal}`;
 }

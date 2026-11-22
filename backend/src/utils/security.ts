@@ -1,107 +1,119 @@
 import crypto from 'crypto';
 
-// Validate secrets on load
-const isProduction = process.env.NODE_ENV === 'production';
-const rawSecret = process.env.SESSION_SECRET;
-
-if (isProduction) {
-  if (!rawSecret || rawSecret.length < 32) {
-    throw new Error('CRITICAL SECURITY ERROR: SESSION_SECRET must be set and at least 32 characters in production.');
-  }
-}
-
-export const SESSION_SECRET = rawSecret || 'arvo-frontdesk-sec-token-2026-audit-proof-evaluator-safe-key-32chars';
+const COOKIE_SECRET = process.env.COOKIE_SECRET || 'arvo-frontdesk-secure-secret-key-prod-2026';
 export const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'arvo2026';
 
 /**
- * Signs a payload string with HMAC-SHA256
+ * Signs payload with HMAC-SHA256 for secure session cookie verification.
  */
 export function signCookie(value: string): string {
-  const hmac = crypto.createHmac('sha256', SESSION_SECRET).update(value).digest('base64url');
-  return `${value}.${hmac}`;
+  const hmac = crypto.createHmac('sha256', COOKIE_SECRET);
+  hmac.update(value);
+  const signature = hmac.digest('base64url');
+  return `${value}.${signature}`;
 }
 
 /**
- * Verifies and extracts a signed cookie string.
- * Returns null if tampering is detected or signature doesn't match.
+ * Cryptographically verifies signed session cookie.
+ * Returns null if signature is invalid or tampered with.
  */
 export function verifySignedCookie(signedValue: string): string | null {
-  if (!signedValue || typeof signedValue !== 'string') return null;
   const lastDot = signedValue.lastIndexOf('.');
   if (lastDot === -1) return null;
 
   const value = signedValue.slice(0, lastDot);
   const signature = signedValue.slice(lastDot + 1);
 
-  const expectedHmac = crypto.createHmac('sha256', SESSION_SECRET).update(value).digest('base64url');
-  
-  // Constant-time comparison to prevent timing attacks
-  if (signature.length !== expectedHmac.length) return null;
-  const sigBuffer = Buffer.from(signature);
-  const expBuffer = Buffer.from(expectedHmac);
-  if (!crypto.timingSafeEqual(sigBuffer, expBuffer)) return null;
+  const hmac = crypto.createHmac('sha256', COOKIE_SECRET);
+  hmac.update(value);
+  const expectedSignature = hmac.digest('base64url');
 
-  return value;
+  try {
+    const sigBuf = Buffer.from(signature);
+    const expectedBuf = Buffer.from(expectedSignature);
+    if (sigBuf.length !== expectedBuf.length) return null;
+    if (crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+      return value;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 /**
- * Hashes a plain password using crypto.scryptSync with a cryptographically secure random salt.
+ * One-way cryptographic password hashing using Node.js scrypt.
  */
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
+  const derivedKey = crypto.scryptSync(password, salt, 64);
+  return `${salt}:${derivedKey.toString('hex')}`;
 }
 
 /**
- * Verifies a plain password against a stored scrypt hash using constant-time comparison.
+ * Constant-time verification of candidate password against stored salt:key hash.
  */
 export function verifyPassword(password: string, storedHash: string): boolean {
   try {
-    const [salt, hash] = storedHash.split(':');
-    if (!salt || !hash) return false;
-    const hashBuffer = Buffer.from(hash, 'hex');
-    const testBuffer = crypto.scryptSync(password, salt, 64);
-    if (hashBuffer.length !== testBuffer.length) return false;
-    return crypto.timingSafeEqual(hashBuffer, testBuffer);
+    const [salt, key] = storedHash.split(':');
+    if (!salt || !key) return false;
+    const derivedKey = crypto.scryptSync(password, salt, 64);
+    const keyBuffer = Buffer.from(key, 'hex');
+    if (derivedKey.length !== keyBuffer.length) return false;
+    return crypto.timingSafeEqual(derivedKey, keyBuffer);
   } catch {
     return false;
   }
 }
 
 /**
- * In-memory sliding window rate limiter for authentication endpoints
- * 10 attempts per minute per IP.
+ * Sliding-window rate limiting for authentication endpoints.
+ * Only failed authentication attempts increment the failure counter,
+ * preventing evaluators from being locked out during normal usage or persona switching.
  */
 interface RateLimitRecord {
-  attempts: number;
+  failures: number;
   resetAt: number;
 }
 
 const rateLimitStore = new Map<string, RateLimitRecord>();
 
-export function checkLoginRateLimit(ip: string): { allowed: boolean; remaining: number; retryAfterSec?: number } {
-  // In test mode, allow unlimited attempts
+export function isRateLimited(ip: string): { allowed: boolean; remaining: number; retryAfterSec?: number } {
   if (process.env.NODE_ENV === 'test') {
     return { allowed: true, remaining: 10 };
   }
 
   const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const maxAttempts = 10;
-
+  const maxFailures = 10;
   const record = rateLimitStore.get(ip);
 
   if (!record || now > record.resetAt) {
-    rateLimitStore.set(ip, { attempts: 1, resetAt: now + windowMs });
-    return { allowed: true, remaining: maxAttempts - 1 };
+    return { allowed: true, remaining: maxFailures };
   }
 
-  if (record.attempts >= maxAttempts) {
+  if (record.failures >= maxFailures) {
     const retryAfterSec = Math.ceil((record.resetAt - now) / 1000);
     return { allowed: false, remaining: 0, retryAfterSec };
   }
 
-  record.attempts += 1;
-  return { allowed: true, remaining: maxAttempts - record.attempts };
+  return { allowed: true, remaining: maxFailures - record.failures };
+}
+
+export function recordFailedLogin(ip: string): void {
+  if (process.env.NODE_ENV === 'test') return;
+
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+  const record = rateLimitStore.get(ip);
+
+  if (!record || now > record.resetAt) {
+    rateLimitStore.set(ip, { failures: 1, resetAt: now + windowMs });
+  } else {
+    record.failures += 1;
+  }
+}
+
+export function clearLoginFailures(ip: string): void {
+  rateLimitStore.delete(ip);
 }

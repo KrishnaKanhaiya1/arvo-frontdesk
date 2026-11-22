@@ -35,28 +35,28 @@ export const PriorityChangeDialog: React.FC<PriorityChangeDialogProps> = ({ tick
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-2xl w-[480px] max-h-[90vh] overflow-y-auto p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-xl shadow-2xl w-[480px] max-h-[90vh] overflow-y-auto p-6 transition-colors">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-[#0F172A]">Change Priority</h2>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-md transition-colors">
-            <X className="w-4 h-4 text-[#475569]" />
+          <h2 className="text-sm font-semibold text-[var(--foreground)]">Change Priority</h2>
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-subtle)] rounded-md transition-colors text-[var(--muted)] hover:text-[var(--foreground)]">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* SLA recalculation warning */}
-        <div className="flex items-start gap-2 p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg mb-4">
-          <AlertTriangle className="w-4 h-4 text-[#D97706] flex-shrink-0 mt-0.5" />
-          <div className="text-xs text-[#92400E]">
+        <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg mb-4 text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="text-xs">
             <p className="font-semibold mb-0.5">SLA will be recalculated</p>
-            <p>Elapsed business time is preserved. New SLA targets will apply going forward.</p>
+            <p className="opacity-90">Elapsed business time is strictly preserved. New SLA targets apply deterministically going forward.</p>
           </div>
         </div>
 
         {/* Priority selection */}
         <div className="mb-4">
-          <div className="text-xs font-semibold text-[#475569] mb-2">Select new priority:</div>
+          <div className="text-xs font-semibold text-[var(--muted)] mb-2">Select new priority:</div>
           <div className="flex gap-2">
             {priorities.map(({ value, label }) => (
               <button
@@ -65,7 +65,7 @@ export const PriorityChangeDialog: React.FC<PriorityChangeDialogProps> = ({ tick
                 className={`flex-1 py-2.5 px-3 rounded-lg border-2 text-xs font-semibold transition-all ${
                   selected === value
                     ? `${getPriorityColors(value)} border-current`
-                    : 'border-[#E5E7EB] text-[#475569] hover:border-[#CBD5E1]'
+                    : 'border-[var(--border)] text-[var(--muted)] hover:border-[var(--foreground)]'
                 }`}
               >
                 {label}
@@ -79,21 +79,21 @@ export const PriorityChangeDialog: React.FC<PriorityChangeDialogProps> = ({ tick
 
         {/* SLA comparison */}
         {isChanged && (
-          <div className="bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg p-3 mb-4">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-[#94A3B8] mb-2">
+          <div className="bg-[var(--surface-subtle)] border border-[var(--border)] rounded-lg p-3 mb-4">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)] mb-2">
               SLA Target Comparison
             </div>
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <div className="text-[#94A3B8] mb-1">Current ({ticket.priority})</div>
-                <div className="font-mono text-[#475569]">
+                <div className="text-[var(--muted)] mb-1">Current ({ticket.priority})</div>
+                <div className="font-mono text-[var(--foreground)]">
                   <div>FR: {formatMinutes(currentTargets.firstResponseMinutes)}</div>
                   <div>Res: {formatMinutes(currentTargets.resolutionMinutes)}</div>
                 </div>
               </div>
               <div>
-                <div className="text-[#2563EB] mb-1">New ({selected})</div>
-                <div className="font-mono text-[#2563EB] font-semibold">
+                <div className="text-blue-600 dark:text-blue-400 mb-1 font-medium">New ({selected})</div>
+                <div className="font-mono text-blue-600 dark:text-blue-400 font-semibold">
                   <div>FR: {formatMinutes(newTargets.firstResponseMinutes)}</div>
                   <div>Res: {formatMinutes(newTargets.resolutionMinutes)}</div>
                 </div>
@@ -106,14 +106,14 @@ export const PriorityChangeDialog: React.FC<PriorityChangeDialogProps> = ({ tick
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-[#475569] hover:text-[#0F172A] border border-[#E5E7EB] rounded-md hover:bg-slate-50 transition-colors"
+            className="px-4 py-2 text-xs font-medium text-[var(--muted)] hover:text-[var(--foreground)] border border-[var(--border)] rounded-md hover:bg-[var(--surface-subtle)] transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={!isChanged || changePriority.isPending}
-            className="px-4 py-2 text-xs font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md transition-colors disabled:opacity-40"
+            className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-40"
           >
             {changePriority.isPending ? 'Updating…' : 'Confirm Change'}
           </button>
