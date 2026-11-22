@@ -32,7 +32,17 @@ export function formatISTShort(isoString: string): string {
 
 export function formatTimeAgo(isoString: string): string {
   try {
-    return formatDistanceToNow(new Date(isoString), { addSuffix: true });
+    const d = new Date(isoString);
+    const diffMs = Date.now() - d.getTime();
+    // If within 60 seconds (or slightly in the future due to client-server clock skew), display "Just now"
+    if (diffMs > -60000 && diffMs < 60000) {
+      return 'Just now';
+    }
+    // If past, format with suffix; if future by > 1 min, format cleanly
+    if (diffMs <= -60000) {
+      return formatDistanceToNow(d, { addSuffix: false }) + ' ago';
+    }
+    return formatDistanceToNow(d, { addSuffix: true });
   } catch {
     return isoString;
   }

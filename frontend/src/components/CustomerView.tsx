@@ -42,8 +42,15 @@ import { Avatar } from './Avatar';
 export const CustomerView: React.FC = () => {
   const { ticketKey: urlTicketKey } = useParams<{ ticketKey: string }>();
   const navigate = useNavigate();
-  const { customerId: currentCustomerId, customerName, setAgentPersona, logout } = usePersona();
+  const { customerId: currentCustomerId, customerName, role, setCustomerPersona, setAgentPersona, logout } = usePersona();
   const { theme, toggleTheme } = useTheme();
+
+  // If currently in an agent role and navigating to customer portal, automatically switch persona
+  React.useEffect(() => {
+    if (role && role !== 'customer') {
+      setCustomerPersona();
+    }
+  }, [role, setCustomerPersona]);
 
   // Use the session customerId or fallback to 'cust-acme'
   const activeCustomerId = currentCustomerId || 'cust-acme';
@@ -292,7 +299,7 @@ export const CustomerView: React.FC = () => {
               My Support Requests
             </h2>
             <p className="text-xs text-[var(--muted)] mt-0.5">
-              {tickets.length} ticket{tickets.length !== 1 ? 's' : ''} on record
+              {tickets.length} {tickets.length === 1 ? 'ticket' : 'tickets'} on record
             </p>
           </div>
 
