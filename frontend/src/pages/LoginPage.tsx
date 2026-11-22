@@ -17,7 +17,10 @@ import {
   EyeOff, 
   ExternalLink,
   Sparkles,
-  Zap
+  Zap,
+  UserPlus,
+  Building2,
+  User
 } from 'lucide-react';
 import { usePersona } from '../hooks/usePersona';
 import { useTheme } from '../hooks/useTheme';
@@ -42,12 +45,22 @@ const SLIDES = [
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithEmail, setAgentPersona, setCustomerPersona, actorId, actorName, role } = usePersona();
+  const { loginWithEmail, registerNewCustomer, setAgentPersona, setCustomerPersona, actorId, actorName, role } = usePersona();
   const { theme, toggleTheme } = useTheme();
 
-  // Form State
+  // Mode: 'signin' | 'signup'
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+
+  // Sign In Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // Sign Up Form State
+  const [regName, setRegName] = useState('');
+  const [regCompany, setRegCompany] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,6 +92,30 @@ export const LoginPage: React.FC = () => {
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regName.trim() || !regCompany.trim() || !regEmail.trim() || !regPassword.trim()) {
+      setErrorMsg('Please complete all registration fields.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrorMsg(null);
+      await registerNewCustomer({
+        name: regName.trim(),
+        company: regCompany.trim(),
+        email: regEmail.trim(),
+        password: regPassword.trim(),
+      });
+      navigate('/customer');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Registration failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -207,79 +244,247 @@ export const LoginPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="mb-5">
-                <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 font-mono flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5" /> SECURE SIGN IN
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-[var(--content)] tracking-tight font-['Archivo',sans-serif]">
-                  Welcome back
-                </h2>
-                <p className="mt-1 text-xs sm:text-sm text-[var(--muted)]">
-                  Enter your approved account details to continue.
-                </p>
+              {/* Auth Mode Toggle (Sign In vs Create Customer Account) */}
+              <div className="flex items-center p-1 bg-[var(--surface-subtle)] border border-[var(--border)] rounded-xl mb-5">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('signin'); setErrorMsg(null); }}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                    authMode === 'signin'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-[var(--muted)] hover:text-[var(--content)]'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('signup'); setErrorMsg(null); }}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                    authMode === 'signup'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-[var(--muted)] hover:text-[var(--content)]'
+                  }`}
+                >
+                  Create Account (New User)
+                </button>
               </div>
 
-              {/* Error Alert */}
-              {errorMsg && (
-                <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 px-3.5 py-2.5 text-xs text-red-700 dark:text-red-300">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{errorMsg}</span>
-                </div>
-              )}
-
-              {/* Credentials Form */}
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
-                    Email
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@arvo.systems"
-                      required
-                      autoFocus
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
-                    />
-                    <Mail className="w-4 h-4 text-[var(--muted)] absolute right-3.5 top-3.5 pointer-events-none" />
+              {authMode === 'signin' ? (
+                <>
+                  <div className="mb-5">
+                    <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 font-mono flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" /> SECURE SIGN IN
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-extrabold text-[var(--content)] tracking-tight font-['Archivo',sans-serif]">
+                      Welcome back
+                    </h2>
+                    <p className="mt-1 text-xs sm:text-sm text-[var(--muted)]">
+                      Enter your approved account details to continue.
+                    </p>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Password"
-                      required
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs pr-10"
-                    />
+                  {/* Error Alert */}
+                  {errorMsg && (
+                    <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 px-3.5 py-2.5 text-xs text-red-700 dark:text-red-300">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{errorMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Credentials Form */}
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                        Email
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="you@arvo.systems"
+                          required
+                          autoFocus
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
+                        />
+                        <Mail className="w-4 h-4 text-[var(--muted)] absolute right-3.5 top-3.5 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                        Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Password"
+                          required
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-3.5 text-[var(--muted)] hover:text-[var(--content)] cursor-pointer"
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
                     <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-3.5 text-[var(--muted)] hover:text-[var(--content)] cursor-pointer"
-                      title={showPassword ? 'Hide password' : 'Show password'}
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl font-semibold text-sm text-white bg-blue-600 hover:bg-blue-700 active:translate-y-px disabled:opacity-50 transition-all shadow-md shadow-blue-500/20 cursor-pointer group"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <span>{isSubmitting ? 'Authenticating...' : 'Sign in'}</span>
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </button>
-                  </div>
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl font-semibold text-sm text-white bg-blue-600 hover:bg-blue-700 active:translate-y-px disabled:opacity-50 transition-all shadow-md shadow-blue-500/20 cursor-pointer group"
-                >
-                  <span>{isSubmitting ? 'Authenticating...' : 'Sign in'}</span>
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </button>
-              </form>
+                    <div className="pt-1 text-center text-xs text-[var(--muted)]">
+                      First-time user or new client organization?{' '}
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('signup'); setErrorMsg(null); }}
+                        className="text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer"
+                      >
+                        Sign up for Customer Portal
+                      </button>
+                    </div>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <div className="mb-5">
+                    <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1.5">
+                      <UserPlus className="w-3.5 h-3.5" /> CLIENT ONBOARDING
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-extrabold text-[var(--content)] tracking-tight font-['Archivo',sans-serif]">
+                      Create Account
+                    </h2>
+                    <p className="mt-1 text-xs sm:text-sm text-[var(--muted)]">
+                      Register your organization to access the Arvo Customer Portal.
+                    </p>
+                  </div>
+
+                  {/* Error Alert */}
+                  {errorMsg && (
+                    <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 px-3.5 py-2.5 text-xs text-red-700 dark:text-red-300">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{errorMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Registration Form */}
+                  <form onSubmit={handleRegister} className="space-y-3.5">
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                        Full Name
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={regName}
+                          onChange={(e) => setRegName(e.target.value)}
+                          placeholder="e.g. Aditi Sen"
+                          required
+                          autoFocus
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
+                        />
+                        <User className="w-4 h-4 text-[var(--muted)] absolute right-3.5 top-3.5 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                        Company / Organization
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={regCompany}
+                          onChange={(e) => setRegCompany(e.target.value)}
+                          placeholder="e.g. Acme Innovations Ltd"
+                          required
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
+                        />
+                        <Building2 className="w-4 h-4 text-[var(--muted)] absolute right-3.5 top-3.5 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                        Work Email
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          value={regEmail}
+                          onChange={(e) => setRegEmail(e.target.value)}
+                          placeholder="you@company.in"
+                          required
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs"
+                        />
+                        <Mail className="w-4 h-4 text-[var(--muted)] absolute right-3.5 top-3.5 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-[var(--content)] mb-1.5 font-mono">
+                        Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          placeholder="Create a password (min 6 chars)"
+                          required
+                          minLength={6}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[15px] font-medium text-[var(--content)] placeholder-[var(--subtle)] focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-xs pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-3.5 text-[var(--muted)] hover:text-[var(--content)] cursor-pointer"
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Enterprise Notice */}
+                    <div className="p-3 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/40 text-[11px] text-blue-900 dark:text-blue-200 leading-relaxed">
+                      <strong>Enterprise RBAC Note:</strong> Support Agent & Lead roles are restricted to internal staff provisioned by Arvo Systems IT. New client organizations can self-register here to submit and track support tickets.
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl font-semibold text-sm text-white bg-emerald-600 hover:bg-emerald-700 active:translate-y-px disabled:opacity-50 transition-all shadow-md shadow-emerald-500/20 cursor-pointer group"
+                    >
+                      <span>{isSubmitting ? 'Creating Account...' : 'Create Account & Launch Portal'}</span>
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                    </button>
+
+                    <div className="pt-1 text-center text-xs text-[var(--muted)]">
+                      Already have an account?{' '}
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('signin'); setErrorMsg(null); }}
+                        className="text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer"
+                      >
+                        Sign in to existing account
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
 
               {/* Evaluator Quick-Access Accounts with Demo Credentials */}
               <div id="evaluator-credentials" className="mt-5 pt-4 border-t border-[var(--border)]">

@@ -248,6 +248,82 @@ router.post('/demo-login', async (req: Request, res: Response, next: NextFunctio
 });
 
 /**
+ * POST /api/auth/register
+ * Self-service registration for new Customer Portal accounts.
+ * Note: Support Agent accounts are strictly provisioned by internal IT directory.
+ */
+const RegisterSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Please enter a valid work email'),
+  company: z.string().min(2, 'Company / Organization name is required'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+router.post('/register', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name, email, company, password } = RegisterSchema.parse(req.body);
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if customer or agent with that email already exists
+    const [existingCustomer, existingAgent] = await Promise.all([
+      prisma.customer.findUnique({ where: { email: cleanEmail } }),
+      prisma.agent.findUnique({ where: { email: cleanEmail } }),
+    ]);
+
+    if (existingCustomer || existingAgent) {
+      throw new AppError(409, ERROR_CODES.CONFLICT || 'CONFLICT', 'An account with this email address already exists.');
+    }
+
+    // Generate avatar initials and color
+    const parts = name.trim().split(/\s+/);
+    const avatarInitials = parts.length > 1
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : name.slice(0, 2).toUpperCase();
+
+    const colors = ['#059669', '#2563EB', '#7C3AED', '#D97706', '#0891B2', '#DC2626'];
+    const avatarColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const customer = await prisma.customer.create({
+      data: {
+        name: name.trim(),
+        email: cleanEmail,
+        company: company.trim(),
+        avatarColor,
+        avatarInitials,
+      },
+    });
+
+    const user: SessionPayload = {
+      userId: customer.id,
+      role: 'customer',
+      name: customer.name,
+      email: customer.email,
+      avatarColor: customer.avatarColor,
+      avatarInitials: customer.avatarInitials,
+      company: customer.company,
+    };
+
+    const serialized = JSON.stringify(user);
+    const signed = signCookie(serialized);
+
+    res.cookie(COOKIE_NAME, signed, getCookieOptions());
+
+    res.status(201).json({
+      success: true,
+      user,
+      message: 'Customer account created successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Validation failed', { issues: err.issues }));
+    } else {
+      next(err);
+    }
+  }
+});
+
+/**
  * GET /api/auth/session
  * Returns the active session payload from the HTTP-only cookie, verified against database.
  * Automatically refreshes cookie expiration.

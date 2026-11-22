@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import { useQueryClient } from '@tanstack/react-query';
 import { useAgents } from './useTickets';
 import type { Agent } from '../types/contracts';
-import { loginDemoPersona, fetchCurrentSession, logoutPersona, loginWithCredentials } from '../lib/api';
+import { loginDemoPersona, fetchCurrentSession, logoutPersona, loginWithCredentials, registerCustomer } from '../lib/api';
 
 export type PersonaMode = 'agent' | 'customer';
 
@@ -31,6 +31,7 @@ interface PersonaContextValue extends PersonaState {
   setAgentPersona: (agentId: string) => Promise<void>;
   setCustomerPersona: (customerId?: string) => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<any>;
+  registerNewCustomer: (payload: { name: string; email: string; company: string; password: string }) => Promise<any>;
   logout: () => Promise<void>;
 }
 
@@ -243,6 +244,41 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const registerNewCustomer = async (payload: { name: string; email: string; company: string; password: string }) => {
+    queryClient.clear();
+    setState((s) => ({ ...s, isSwitchingPersona: true }));
+    try {
+      const res = await registerCustomer(payload);
+      if (res.user) {
+        const u = res.user;
+        localStorage.setItem('arvo_authenticated', 'true');
+        localStorage.setItem('arvo_actor_role', 'customer');
+        localStorage.setItem('arvo_actor_id', u.userId);
+        setState((s) => ({
+          ...s,
+          isAuthenticated: true,
+          isSwitchingPersona: false,
+          mode: 'customer',
+          role: 'customer',
+          isLead: false,
+          actorId: u.userId,
+          actorName: u.name,
+          agentId: null,
+          agentName: null,
+          customerId: u.userId,
+          customerName: u.name,
+          customerCompany: u.company,
+          customerInitials: u.avatarInitials || 'CU',
+          customerColor: u.avatarColor || '#059669',
+        }));
+        queryClient.invalidateQueries();
+      }
+      return res.user;
+    } finally {
+      setState((s) => ({ ...s, isSwitchingPersona: false }));
+    }
+  };
+
   const logout = async () => {
     try {
       await logoutPersona();
@@ -264,7 +300,7 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <PersonaContext.Provider value={{ ...state, setAgentPersona, setCustomerPersona, loginWithEmail, logout }}>
+    <PersonaContext.Provider value={{ ...state, setAgentPersona, setCustomerPersona, loginWithEmail, registerNewCustomer, logout }}>
       {children}
     </PersonaContext.Provider>
   );

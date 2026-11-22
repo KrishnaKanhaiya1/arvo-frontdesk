@@ -52,6 +52,13 @@ export async function loginWithCredentials(email: string, password: string) {
   });
 }
 
+export async function registerCustomer(data: { name: string; email: string; company: string; password: string }) {
+  return apiFetch<{ success: boolean; user: any; message: string }>('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function loginDemoPersona(personaId: string) {
   return apiFetch<{ success: boolean; user: any }>('/api/auth/demo-login', {
     method: 'POST',
