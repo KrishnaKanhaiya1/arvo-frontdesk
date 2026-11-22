@@ -1,0 +1,308 @@
+import { Router, Request, Response, NextFunction, CookieOptions } from 'express';
+import { z } from 'zod';
+import prisma from '../utils/prisma';
+import { AppError } from '../middleware/errorHandler';
+import { ERROR_CODES } from '../types/contracts';
+import { signCookie, verifySignedCookie, checkLoginRateLimit, DEMO_PASSWORD } from '../utils/security';
+
+const router = Router();
+
+export const COOKIE_NAME = 'arvo_session';
+
+const getCookieOptions = (): CookieOptions => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/',
+});
+
+export interface SessionPayload {
+  userId: string;
+  role: 'lead' | 'agent' | 'customer';
+  name: string;
+  email: string;
+  avatarColor: string;
+  avatarInitials: string;
+  company?: string;
+}
+
+const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+const DemoLoginSchema = z.object({
+  personaId: z.string().min(1),
+});
+
+/**
+ * GET /api/auth/demo-personas
+ * Returns publicly available evaluator quick-access demo accounts.
+ */
+router.get('/demo-personas', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [agents, customers] = await Promise.all([
+      prisma.agent.findMany({ orderBy: { name: 'asc' } }),
+      prisma.customer.findMany({ orderBy: { name: 'asc' } }),
+    ]);
+
+    const demoProfiles = [
+      ...agents.map((a) => ({
+        id: a.id,
+        role: a.role as 'lead' | 'agent',
+        name: a.name,
+        email: a.email,
+        company: 'Arvo Systems Core Support',
+        avatarColor: a.avatarColor,
+        avatarInitials: a.avatarInitials,
+      })),
+      ...customers.map((c) => ({
+        id: c.id,
+        role: 'customer' as const,
+        name: c.name,
+        email: c.email,
+        company: c.company,
+        avatarColor: c.avatarColor,
+        avatarInitials: c.avatarInitials,
+      })),
+    ];
+
+    res.json({
+      success: true,
+      demoPassword: DEMO_PASSWORD,
+      data: demoProfiles,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/auth/login
+ * Real credentials authentication for Agents & Customers
+ * Protected with sliding-window IP rate limiting (10 req/min).
+ */
+router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // 1. Rate limiting check
+    const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const rateCheck = checkLoginRateLimit(clientIp);
+    if (!rateCheck.allowed) {
+      res.setHeader('Retry-After', String(rateCheck.retryAfterSec || 60));
+      throw new AppError(
+        429,
+        ERROR_CODES.RATE_LIMITED || 'TOO_MANY_REQUESTS',
+        `Too many login attempts. Please wait ${rateCheck.retryAfterSec || 60} seconds before retrying.`
+      );
+    }
+
+    const { email, password } = LoginSchema.parse(req.body);
+
+    // 2. Strict password validation — NO fallback to 'admin' or 'password'
+    if (password !== DEMO_PASSWORD) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 3. Search Agent
+    const agent = await prisma.agent.findUnique({ where: { email: cleanEmail } });
+    if (agent) {
+      const user: SessionPayload = {
+        userId: agent.id,
+        role: agent.role as 'lead' | 'agent',
+        name: agent.name,
+        email: agent.email,
+        avatarColor: agent.avatarColor,
+        avatarInitials: agent.avatarInitials,
+        company: 'Arvo Support Operations',
+      };
+
+      const serialized = JSON.stringify(user);
+      const signed = signCookie(serialized);
+
+      res.cookie(COOKIE_NAME, signed, getCookieOptions());
+
+      return res.json({
+        success: true,
+        user,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // 4. Search Customer
+    const customer = await prisma.customer.findUnique({ where: { email: cleanEmail } });
+    if (customer) {
+      const user: SessionPayload = {
+        userId: customer.id,
+        role: 'customer',
+        name: customer.name,
+        email: customer.email,
+        avatarColor: customer.avatarColor,
+        avatarInitials: customer.avatarInitials,
+        company: customer.company,
+      };
+
+      const serialized = JSON.stringify(user);
+      const signed = signCookie(serialized);
+
+      res.cookie(COOKIE_NAME, signed, getCookieOptions());
+
+      return res.json({
+        success: true,
+        user,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Generic error to prevent account enumeration
+    throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Please enter a valid email address and password.', { issues: err.issues }));
+    } else {
+      next(err);
+    }
+  }
+});
+
+/**
+ * POST /api/auth/demo-login
+ * Issues an HTTP-only, SameSite session cookie for pre-provisioned demo personas.
+ */
+router.post('/demo-login', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const rateCheck = checkLoginRateLimit(clientIp);
+    if (!rateCheck.allowed) {
+      res.setHeader('Retry-After', String(rateCheck.retryAfterSec || 60));
+      throw new AppError(
+        429,
+        ERROR_CODES.RATE_LIMITED || 'TOO_MANY_REQUESTS',
+        `Rate limit exceeded. Please wait ${rateCheck.retryAfterSec || 60} seconds.`
+      );
+    }
+
+    const { personaId } = DemoLoginSchema.parse(req.body);
+
+    // 1. Check if agent
+    const agent = await prisma.agent.findUnique({ where: { id: personaId } });
+    if (agent) {
+      const user: SessionPayload = {
+        userId: agent.id,
+        role: agent.role as 'lead' | 'agent',
+        name: agent.name,
+        email: agent.email,
+        avatarColor: agent.avatarColor,
+        avatarInitials: agent.avatarInitials,
+        company: 'Arvo Support Operations',
+      };
+
+      const serialized = JSON.stringify(user);
+      const signed = signCookie(serialized);
+
+      res.cookie(COOKIE_NAME, signed, getCookieOptions());
+
+      return res.json({
+        success: true,
+        user,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // 2. Check if customer
+    const customer = await prisma.customer.findUnique({ where: { id: personaId } });
+    if (customer) {
+      const user: SessionPayload = {
+        userId: customer.id,
+        role: 'customer',
+        name: customer.name,
+        email: customer.email,
+        avatarColor: customer.avatarColor,
+        avatarInitials: customer.avatarInitials,
+        company: customer.company,
+      };
+
+      const serialized = JSON.stringify(user);
+      const signed = signCookie(serialized);
+
+      res.cookie(COOKIE_NAME, signed, getCookieOptions());
+
+      return res.json({
+        success: true,
+        user,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    throw new AppError(404, ERROR_CODES.NOT_FOUND, `Demo persona '${personaId}' not found.`);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Validation failed', { issues: err.issues }));
+    } else {
+      next(err);
+    }
+  }
+});
+
+/**
+ * GET /api/auth/session
+ * Returns the active session payload from the HTTP-only cookie, verified against database.
+ * Automatically refreshes cookie expiration.
+ */
+router.get('/session', async (req: Request, res: Response) => {
+  const cookieVal = req.cookies?.[COOKIE_NAME];
+  if (!cookieVal) {
+    return res.json({ authenticated: false, user: null });
+  }
+
+  try {
+    const rawPayload = typeof cookieVal === 'string' ? verifySignedCookie(cookieVal) : null;
+    if (!rawPayload) {
+      res.clearCookie(COOKIE_NAME, { path: '/' });
+      return res.json({ authenticated: false, user: null });
+    }
+    const user: SessionPayload = JSON.parse(rawPayload);
+    if (user.role === 'customer') {
+      const cust = await prisma.customer.findUnique({ where: { id: user.userId } });
+      if (!cust) {
+        res.clearCookie(COOKIE_NAME, { path: '/' });
+        return res.json({ authenticated: false, user: null });
+      }
+      user.name = cust.name;
+      user.company = cust.company;
+    } else {
+      const ag = await prisma.agent.findUnique({ where: { id: user.userId } });
+      if (!ag) {
+        res.clearCookie(COOKIE_NAME, { path: '/' });
+        return res.json({ authenticated: false, user: null });
+      }
+      user.name = ag.name;
+      user.role = ag.role as 'lead' | 'agent';
+    }
+
+    // Refresh valid session cookie with updated maxAge
+    res.cookie(COOKIE_NAME, cookieVal, getCookieOptions());
+
+    return res.json({
+      authenticated: true,
+      user,
+    });
+  } catch {
+    res.clearCookie(COOKIE_NAME, { path: '/' });
+    return res.json({ authenticated: false, user: null });
+  }
+});
+
+/**
+ * POST /api/auth/logout
+ * Clears the session cookie.
+ */
+router.post('/logout', (_req: Request, res: Response) => {
+  res.clearCookie(COOKIE_NAME, { path: '/' });
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+export default router;

@@ -4,7 +4,7 @@ import { installAuditImmutabilityTrigger } from './auditTrigger';
 
 const prisma = new PrismaClient();
 
-async function main() {
+export async function seed(prisma: PrismaClient) {
   console.log('🌱 Seeding Arvo Frontdesk database...');
 
   // Allow cleanup setting for seed script
@@ -755,9 +755,11 @@ async function main() {
   console.log('   Internal Notes: 4 (on ARV-101, ARV-105, ARV-106)');
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+if (process.argv[1]?.includes('seed.ts')) {
+  seed(prisma)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

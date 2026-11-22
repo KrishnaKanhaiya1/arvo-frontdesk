@@ -1,17 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTickets } from '../hooks/useTickets';
+import { useTickets, useResetDemo } from '../hooks/useTickets';
 import { usePersona } from '../hooks/usePersona';
+import { IconRail } from '../components/IconRail';
 import { TopBar } from '../components/TopBar';
 import { TelemetryStrip } from '../components/TelemetryStrip';
 import { LeftRail } from '../components/LeftRail';
 import { TicketList } from '../components/TicketList';
 import { TicketDetail } from '../components/TicketDetail';
 import { InspectorPanel } from '../components/InspectorPanel';
+import { CommandPalette } from '../components/CommandPalette';
+import { EvaluatorGuideModal } from '../components/EvaluatorGuideModal';
+import { ResetConfirmModal } from '../components/ResetConfirmModal';
+import { DemoClockPopover } from '../components/DemoClockPopover';
 import { KeyboardShortcutsLegend } from '../components/KeyboardShortcutsLegend';
 import type { TicketSummary } from '../types/contracts';
 import { TicketStatus, TicketPriority } from '../types/contracts';
 import { getSLAOverallState } from '../lib/utils';
+import { List, MessageSquare, Info, Menu } from 'lucide-react';
 
 export type QueueFilter =
   | 'all'
@@ -50,16 +56,39 @@ export const AgentWorkspace: React.FC = () => {
   const [activeQueue, setActiveQueue] = useState<QueueFilter>('all');
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Modals & Panels State
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showEvaluatorGuide, setShowEvaluatorGuide] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showClock, setShowClock] = useState(false);
+
+  // Mobile navigation view state
+  const [mobileTab, setMobileTab] = useState<'queue' | 'detail' | 'inspector'>('queue');
 
   const { data: allTickets = [] } = useTickets();
+  const resetDemo = useResetDemo();
 
   // Sync URL → state
   useEffect(() => {
     if (urlTicketKey && urlTicketKey !== selectedTicketKey) {
       setSelectedTicketKey(urlTicketKey);
+      setMobileTab('detail');
     }
   }, [urlTicketKey]);
+
+  // Global Command Palette Shortcut (⌘K / Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Filter tickets
   const filteredTickets = React.useMemo(() => {
@@ -104,7 +133,8 @@ export const AgentWorkspace: React.FC = () => {
         t =>
           t.ticketKey.toLowerCase().includes(q) ||
           t.subject.toLowerCase().includes(q) ||
-          t.customerName.toLowerCase().includes(q)
+          t.customerName.toLowerCase().includes(q) ||
+          t.customerCompany.toLowerCase().includes(q)
       );
     }
 
@@ -115,6 +145,7 @@ export const AgentWorkspace: React.FC = () => {
     (key: string) => {
       setSelectedTicketKey(key);
       navigate(`/tickets/${key}`);
+      setMobileTab('detail');
     },
     [navigate]
   );
@@ -123,7 +154,7 @@ export const AgentWorkspace: React.FC = () => {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (isTyping) return;
 
       if (e.key === 'j' || e.key === 'k') {
@@ -143,41 +174,124 @@ export const AgentWorkspace: React.FC = () => {
     setActiveQueue(queue);
   };
 
+  const handleConfirmReset = () => {
+    resetDemo.mutate(undefined, {
+      onSuccess: () => {
+        setShowResetModal(false);
+      },
+    });
+  };
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#F6F7F9]">
-      {/* TopBar */}
-      <TopBar />
-
-      {/* Telemetry Strip */}
-      <TelemetryStrip onFilterChange={handleQueueFilter} activeQueue={activeQueue} />
-
-      {/* Main 3-pane layout */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Rail */}
-        <LeftRail
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-app)] text-[var(--content)] transition-colors duration-200">
+      {/* ── Zone 1: 64px Icon Rail (Desktop only) ── */}
+      <div className="hidden md:flex">
+        <IconRail
           activeQueue={activeQueue}
-          onQueueChange={handleQueueFilter}
-          priorityFilter={priorityFilter}
-          onPriorityChange={setPriorityFilter}
-          tickets={allTickets}
-          onShowShortcuts={() => setShowShortcuts(true)}
+          onSelectQueue={(q) => handleQueueFilter(q as QueueFilter)}
+          onOpenEvaluatorGuide={() => setShowEvaluatorGuide(true)}
+          onOpenShortcuts={() => setShowShortcuts(true)}
+          onOpenCommandPalette={() => setShowCommandPalette(true)}
+          onOpenResetModal={() => setShowResetModal(true)}
         />
+      </div>
 
-        {/* Ticket List */}
-        <TicketList
-          tickets={filteredTickets}
-          selectedKey={selectedTicketKey}
-          onSelect={handleSelectTicket}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+      {/* ── Main Workspace Body (TopBar + Content) ── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* TopBar */}
+        <TopBar onOpenEvaluatorGuide={() => setShowEvaluatorGuide(true)} />
 
-        {/* Right pane: TicketDetail + InspectorPanel */}
-        <div className="flex flex-1 overflow-hidden min-w-0">
-          <TicketDetail ticketKey={selectedTicketKey} />
-          <InspectorPanel ticketKey={selectedTicketKey} />
+        {/* Telemetry Strip */}
+        <TelemetryStrip onFilterChange={handleQueueFilter} activeQueue={activeQueue} />
+
+        {/* Mobile View Switcher (Only visible on screens < 768px) */}
+        <div className="flex md:hidden border-b border-[var(--border)] bg-[var(--surface)] text-xs font-medium">
+          <button
+            onClick={() => setMobileTab('queue')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 ${
+              mobileTab === 'queue' ? 'border-blue-600 text-blue-600 font-semibold' : 'border-transparent text-[var(--muted)]'
+            }`}
+          >
+            <List className="w-4 h-4" /> Queue ({filteredTickets.length})
+          </button>
+          <button
+            onClick={() => setMobileTab('detail')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 ${
+              mobileTab === 'detail' ? 'border-blue-600 text-blue-600 font-semibold' : 'border-transparent text-[var(--muted)]'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" /> Detail
+          </button>
+          <button
+            onClick={() => setMobileTab('inspector')}
+            className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 border-b-2 ${
+              mobileTab === 'inspector' ? 'border-blue-600 text-blue-600 font-semibold' : 'border-transparent text-[var(--muted)]'
+            }`}
+          >
+            <Info className="w-4 h-4" /> SLA
+          </button>
+        </div>
+
+        {/* ── Zone 2, 3, 4: Rails & Panels ── */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Zone 2: 260px Operational Queue Navigation Rail */}
+          <div className="hidden lg:flex w-[260px] flex-shrink-0">
+            <LeftRail
+              activeQueue={activeQueue}
+              onQueueChange={handleQueueFilter}
+              priorityFilter={priorityFilter}
+              onPriorityChange={setPriorityFilter}
+              tickets={allTickets}
+              onShowShortcuts={() => setShowShortcuts(true)}
+              onOpenResetModal={() => setShowResetModal(true)}
+            />
+          </div>
+
+          {/* Ticket Queue List (Desktop always visible, Mobile conditionally) */}
+          <div className={`w-full md:w-[340px] flex-shrink-0 ${mobileTab === 'queue' ? 'flex' : 'hidden md:flex'}`}>
+            <TicketList
+              tickets={filteredTickets}
+              selectedKey={selectedTicketKey}
+              onSelect={handleSelectTicket}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
+          </div>
+
+          {/* Zone 3: Flexible Ticket Detail Pane */}
+          <div className={`flex-1 overflow-hidden min-w-0 ${mobileTab === 'detail' ? 'flex' : 'hidden md:flex'}`}>
+            <TicketDetail ticketKey={selectedTicketKey} />
+          </div>
+
+          {/* Zone 4: 330px Intelligence Inspector Panel */}
+          <div className={`w-full lg:w-[330px] flex-shrink-0 ${mobileTab === 'inspector' ? 'flex' : 'hidden xl:flex'}`}>
+            <InspectorPanel ticketKey={selectedTicketKey} />
+          </div>
         </div>
       </div>
+
+      {/* ── Dialogs & Modals ── */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onOpenEvaluatorGuide={() => setShowEvaluatorGuide(true)}
+        onOpenClock={() => setShowClock(true)}
+        onOpenReset={() => setShowResetModal(true)}
+      />
+
+      <EvaluatorGuideModal
+        isOpen={showEvaluatorGuide}
+        onClose={() => setShowEvaluatorGuide(false)}
+        onOpenClock={() => setShowClock(true)}
+        onOpenReset={() => setShowResetModal(true)}
+      />
+
+      <ResetConfirmModal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onConfirm={handleConfirmReset}
+        isPending={resetDemo.isPending}
+      />
 
       {showShortcuts && <KeyboardShortcutsLegend onClose={() => setShowShortcuts(false)} />}
     </div>

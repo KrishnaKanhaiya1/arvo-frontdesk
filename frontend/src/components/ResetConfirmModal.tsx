@@ -1,0 +1,63 @@
+import React from 'react';
+import { AlertTriangle, RotateCcw, X, ShieldAlert } from 'lucide-react';
+
+interface ResetConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}
+
+export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  isPending,
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-100">
+      <div 
+        className="w-full max-w-md bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3.5 mb-4">
+          <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 flex-shrink-0">
+            <RotateCcw className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-[var(--content)] font-['Archivo',sans-serif]">
+              Reset Canonical Demo Data?
+            </h3>
+            <p className="text-xs text-[var(--muted)] mt-1 leading-relaxed">
+              This will restore all canonical tickets (ARV-101 through ARV-108), reset SLA timers, and re-establish the immutable audit triggers safely in-process.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs mb-5 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>Any uncommitted test tickets created during this session will be permanently cleared.</span>
+        </div>
+
+        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[var(--border)]">
+          <button
+            onClick={onClose}
+            disabled={isPending}
+            className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface-subtle)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isPending}
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow transition-colors flex items-center gap-1.5"
+          >
+            {isPending ? 'Restoring...' : 'Confirm Reset'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { execSync } from 'child_process';
+import { resetToCanonicalSeed } from '../services/seedService';
 import { toZonedTime, format } from 'date-fns-tz';
 import prisma from '../utils/prisma';
 import { getCurrentTime, setSimulatedTime } from '../services/clock';
@@ -109,14 +109,10 @@ router.post('/run-autoclose', requireLeadRole, async (_req: Request, res: Respon
 // ── POST /api/system/reset-demo ───────────────────────────────
 router.post('/reset-demo', requireLeadRole, async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    execSync('npx tsx prisma/seed.ts', {
-      cwd: process.cwd(),
-      stdio: 'pipe',
-      timeout: 60000,
-    });
+    await resetToCanonicalSeed(prisma);
     res.json({
       success: true,
-      data: { message: 'Demo reset successfully. All seed data restored.' },
+      data: { message: 'Demo reset successfully. All canonical seed data restored safely in-process.' },
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {

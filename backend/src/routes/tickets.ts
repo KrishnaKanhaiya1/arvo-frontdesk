@@ -7,8 +7,12 @@ import {
   addBusinessMinutes,
   calculateBusinessMinutesBetween,
   calculateInitialResolutionTarget,
+  calculateResolutionDeadline,
+  isBusinessHour,
+  getNextBusinessOpen,
 } from '../services/sla';
 import { AppError } from '../middleware/errorHandler';
+import { requireAgentRole } from '../middleware/auth';
 import {
   SLA_TARGETS,
   TicketPriority,
@@ -19,6 +23,7 @@ import notesRouter from './notes';
 import auditRouter from './audit';
 
 const router = Router();
+router.use(requireAgentRole);
 
 // Subroutes for notes and audit
 router.use('/:key/notes', notesRouter);
@@ -582,7 +587,21 @@ router.patch('/:key/priority', async (req: Request, res: Response, next: NextFun
       const currentResElapsed = ticket.slaResolutionElapsed + liveElapsed;
 
       const newTargets = SLA_TARGETS[body.newPriority];
-      const newResTarget = calculateInitialResolutionTarget(ticket.createdAt, body.newPriority, holidays);
+      let newResTarget: number;
+
+      if (body.newPriority === TicketPriority.CRITICAL) {
+        // Enforce same-day resolution rule relative to currentTime (not ticket.createdAt):
+        // Fix must occur by 18:30 IST on the current/applicable working day.
+        const deadline = calculateResolutionDeadline(currentTime, 'CRITICAL', 540, holidays);
+        const effectiveStart = isBusinessHour(currentTime, holidays)
+          ? currentTime
+          : getNextBusinessOpen(currentTime, holidays);
+        const minutesAvailable = Math.max(30, calculateBusinessMinutesBetween(effectiveStart, deadline, holidays));
+        // Preserve accumulated business time:
+        newResTarget = currentResElapsed + minutesAvailable;
+      } else {
+        newResTarget = newTargets.resolutionMinutes;
+      }
 
       const beforeState = {
         priority: ticket.priority,

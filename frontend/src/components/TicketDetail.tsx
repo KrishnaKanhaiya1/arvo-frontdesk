@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Lock, User, AlertCircle, Check } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, Lock, User, AlertCircle, Check, Save } from 'lucide-react';
 import {
   useTicket,
   useInternalNotes,
@@ -20,6 +21,7 @@ import type { TicketDetail as TicketDetailType, TicketMessage, InternalNote } fr
 import { Avatar } from './Avatar';
 import { SLABreakdownPopover } from './SLABreakdownPopover';
 import { PriorityChangeDialog } from './PriorityChangeDialog';
+import { ConflictModal } from './ConflictModal';
 
 interface TicketDetailProps {
   ticketKey: string | null;
@@ -43,6 +45,7 @@ function mergeTimeline(messages: TicketMessage[], notes: InternalNote[]): Timeli
 }
 
 export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
+  const qc = useQueryClient();
   const { agentId, agentName } = usePersona();
   const { data: ticket, isLoading } = useTicket(ticketKey);
   const { data: notes = [] } = useInternalNotes(ticketKey);
@@ -55,8 +58,42 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
   const [noteText, setNoteText] = useState('');
   const [showReplyDropdown, setShowReplyDropdown] = useState(false);
   const [showPriorityDialog, setShowPriorityDialog] = useState(false);
+  const [showConflictModal, setShowConflictModal] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Restore saved drafts when switching ticket
+  useEffect(() => {
+    if (ticketKey) {
+      const savedReply = localStorage.getItem(`arvo_draft_reply_${ticketKey}`) || '';
+      const savedNote = localStorage.getItem(`arvo_draft_note_${ticketKey}`) || '';
+      setReplyText(savedReply);
+      setNoteText(savedNote);
+    }
+  }, [ticketKey]);
+
+  // Handle Draft Auto-save
+  const handleReplyChange = (val: string) => {
+    setReplyText(val);
+    if (ticketKey) {
+      if (val.trim()) {
+        localStorage.setItem(`arvo_draft_reply_${ticketKey}`, val);
+      } else {
+        localStorage.removeItem(`arvo_draft_reply_${ticketKey}`);
+      }
+    }
+  };
+
+  const handleNoteChange = (val: string) => {
+    setNoteText(val);
+    if (ticketKey) {
+      if (val.trim()) {
+        localStorage.setItem(`arvo_draft_note_${ticketKey}`, val);
+      } else {
+        localStorage.removeItem(`arvo_draft_note_${ticketKey}`);
+      }
+    }
+  };
 
   // Auto-scroll to bottom when messages load
   useEffect(() => {
@@ -118,12 +155,30 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
 
   const handleClaim = () => {
     if (!agentId) return;
-    claimTicket.mutate({ agentId, version: ticket.version });
+    claimTicket.mutate(
+      { agentId, version: ticket.version },
+      {
+        onError: (err: any) => {
+          if (err?.status === 409 || err?.code === 'VERSION_MISMATCH' || err?.code === 'CONFLICT') {
+            setShowConflictModal(true);
+          }
+        },
+      }
+    );
   };
 
   const handleTakeOver = () => {
     if (!agentId) return;
-    claimTicket.mutate({ agentId, version: ticket.version, allowTakeover: true });
+    claimTicket.mutate(
+      { agentId, version: ticket.version, allowTakeover: true },
+      {
+        onError: (err: any) => {
+          if (err?.status === 409 || err?.code === 'VERSION_MISMATCH' || err?.code === 'CONFLICT') {
+            setShowConflictModal(true);
+          }
+        },
+      }
+    );
   };
 
   const handleSendReply = (action: ReplyAction) => {
@@ -136,7 +191,17 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
         : undefined;
     sendReply.mutate(
       { agentId, content: replyText.trim(), newStatus, version: ticket.version },
-      { onSuccess: () => setReplyText('') }
+      {
+        onSuccess: () => {
+          setReplyText('');
+          if (ticketKey) localStorage.removeItem(`arvo_draft_reply_${ticketKey}`);
+        },
+        onError: (err: any) => {
+          if (err?.status === 409 || err?.code === 'VERSION_MISMATCH' || err?.code === 'CONFLICT') {
+            setShowConflictModal(true);
+          }
+        },
+      }
     );
     setShowReplyDropdown(false);
   };
@@ -145,8 +210,37 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
     if (!noteText.trim() || !agentId) return;
     addNote.mutate(
       { agentId, content: noteText.trim() },
-      { onSuccess: () => setNoteText('') }
+      {
+        onSuccess: () => {
+          setNoteText('');
+          if (ticketKey) localStorage.removeItem(`arvo_draft_note_${ticketKey}`);
+        },
+        onError: (err: any) => {
+          if (err?.status === 409 || err?.code === 'VERSION_MISMATCH' || err?.code === 'CONFLICT') {
+            setShowConflictModal(true);
+          }
+        },
+      }
     );
+  };
+
+  const handleConflictRefresh = () => {
+    qc.invalidateQueries({ queryKey: ['ticket', ticketKey] });
+    qc.invalidateQueries({ queryKey: ['tickets'] });
+    setShowConflictModal(false);
+  };
+
+  const handleConflictDiscard = () => {
+    if (composerTab === 'reply') {
+      setReplyText('');
+      if (ticketKey) localStorage.removeItem(`arvo_draft_reply_${ticketKey}`);
+    } else {
+      setNoteText('');
+      if (ticketKey) localStorage.removeItem(`arvo_draft_note_${ticketKey}`);
+    }
+    qc.invalidateQueries({ queryKey: ['ticket', ticketKey] });
+    qc.invalidateQueries({ queryKey: ['tickets'] });
+    setShowConflictModal(false);
   };
 
   const timeline = mergeTimeline(ticket.messages, notes);
@@ -332,50 +426,59 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
             <div className="p-3 bg-white">
               <textarea
                 value={replyText}
-                onChange={e => setReplyText(e.target.value)}
+                onChange={e => handleReplyChange(e.target.value)}
                 placeholder="Write a reply to the customer…"
                 rows={3}
                 className="w-full text-sm border border-[#E5E7EB] rounded-lg px-3 py-2 text-[#0F172A] placeholder-[#94A3B8] resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
               />
-              <div className="flex items-center justify-end gap-2 mt-2">
-                {!isAssignedToMe && !isUnassigned && (
-                  <span className="text-[10px] text-[#D97706] font-medium">
-                    Claim ticket to reply
-                  </span>
-                )}
-                <div className="relative" ref={dropdownRef}>
-                  <div className="flex">
-                    <button
-                      onClick={() => handleSendReply('send')}
-                      disabled={!replyText.trim() || !isAssignedToMe || sendReply.isPending}
-                      className="px-3 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white text-xs font-semibold rounded-l-md transition-colors"
-                    >
-                      {sendReply.isPending ? 'Sending…' : 'Send to Customer'}
-                    </button>
-                    <button
-                      onClick={() => setShowReplyDropdown(s => !s)}
-                      disabled={!replyText.trim() || !isAssignedToMe || sendReply.isPending}
-                      className="px-1.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white rounded-r-md border-l border-[#1D4ED8] transition-colors"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  {showReplyDropdown && (
-                    <div className="absolute right-0 bottom-full mb-1 w-56 bg-white border border-[#E5E7EB] rounded-lg shadow-xl z-10">
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  {replyText.trim() && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      <Save className="w-3 h-3" /> Draft saved
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isAssignedToMe && !isUnassigned && (
+                    <span className="text-[10px] text-[#D97706] font-medium">
+                      Claim ticket to reply
+                    </span>
+                  )}
+                  <div className="relative" ref={dropdownRef}>
+                    <div className="flex">
                       <button
-                        onClick={() => handleSendReply('send_wait')}
-                        className="w-full text-left px-3 py-2 text-xs text-[#0F172A] hover:bg-slate-50 rounded-t-lg"
+                        onClick={() => handleSendReply('send')}
+                        disabled={!replyText.trim() || !isAssignedToMe || sendReply.isPending}
+                        className="px-3 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white text-xs font-semibold rounded-l-md transition-colors"
                       >
-                        Send &amp; mark Waiting on Customer
+                        {sendReply.isPending ? 'Sending…' : 'Send to Customer'}
                       </button>
                       <button
-                        onClick={() => handleSendReply('send_resolve')}
-                        className="w-full text-left px-3 py-2 text-xs text-[#0F172A] hover:bg-slate-50 rounded-b-lg border-t border-[#E5E7EB]"
+                        onClick={() => setShowReplyDropdown(s => !s)}
+                        disabled={!replyText.trim() || !isAssignedToMe || sendReply.isPending}
+                        className="px-1.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white rounded-r-md border-l border-[#1D4ED8] transition-colors"
                       >
-                        Send &amp; Resolve
+                        <ChevronDown className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  )}
+                    {showReplyDropdown && (
+                      <div className="absolute right-0 bottom-full mb-1 w-56 bg-white border border-[#E5E7EB] rounded-lg shadow-xl z-10">
+                        <button
+                          onClick={() => handleSendReply('send_wait')}
+                          className="w-full text-left px-3 py-2 text-xs text-[#0F172A] hover:bg-slate-50 rounded-t-lg"
+                        >
+                          Send &amp; mark Waiting on Customer
+                        </button>
+                        <button
+                          onClick={() => handleSendReply('send_resolve')}
+                          className="w-full text-left px-3 py-2 text-xs text-[#0F172A] hover:bg-slate-50 rounded-b-lg border-t border-[#E5E7EB]"
+                        >
+                          Send &amp; Resolve
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -389,12 +492,19 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
               </div>
               <textarea
                 value={noteText}
-                onChange={e => setNoteText(e.target.value)}
+                onChange={e => handleNoteChange(e.target.value)}
                 placeholder="Add a private internal note for your team…"
                 rows={3}
                 className="w-full text-sm border border-[#F59E0B] rounded-lg px-3 py-2 text-[#78350F] placeholder-[#B45309] bg-[#FFFBEB] resize-none focus:outline-none focus:ring-2 focus:ring-[#F59E0B] focus:border-transparent"
               />
-              <div className="flex justify-end mt-2">
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  {noteText.trim() && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                      <Save className="w-3 h-3" /> Draft saved
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={handleSaveNote}
                   disabled={!noteText.trim() || addNote.isPending}
@@ -420,6 +530,17 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
           onClose={() => setShowPriorityDialog(false)}
         />
       )}
+
+      {/* Concurrency Conflict Recovery Modal */}
+      <ConflictModal
+        isOpen={showConflictModal}
+        onClose={() => setShowConflictModal(false)}
+        onRefresh={handleConflictRefresh}
+        onDiscard={handleConflictDiscard}
+        ticketKey={ticket.ticketKey}
+        cachedVersion={ticket.version}
+        draftContent={composerTab === 'reply' ? replyText : noteText}
+      />
     </div>
   );
 };

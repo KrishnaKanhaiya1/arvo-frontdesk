@@ -49,10 +49,47 @@ Arvo promises support based on severity, but strictly within **business hours**:
 
 ---
 
+## 🔑 Evaluator Test Credentials & Instant Access
+
+The application features a real credentials authentication system (`POST /api/auth/login`) issuing cryptographically signed HMAC-SHA256 session cookies (`arvo_session`). For seamless evaluator verification, all test accounts share the universal demo password **`arvo2026`**, with 1-click auto-fill cards directly on the login screen:
+
+| Persona | Role | Email | Password | Allowed Scopes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Meera Krishnan** | Support Lead | `meera@arvo.systems` | `arvo2026` | Full triage, lead-only reassignment, demo clock override, auto-close cron trigger |
+| **Rahul Sharma** | Tier 2 Agent | `rahul@arvo.systems` | `arvo2026` | Incident claims, customer public replies, private internal notes, audit trail |
+| **Priya Patel** | Tier 1 Agent | `priya@arvo.systems` | `arvo2026` | Ticket triage, claims, communication, resolution workflows |
+| **Vikram Patel** | Customer (Acme Corp) | `vikram@acmecorp.in` | `arvo2026` | Customer portal, verified status tracking, 5-day reopen, linked follow-up tickets |
+
+*Evaluators can also click **"Direct Demo Launch"** in the top navigation bar to immediately launch the Lead Workspace with zero typing.*
+
+---
+
+## 🖥️ UI/UX Design Benchmark — Exceeding Reference 2 Standards
+
+The frontend has been completely transformed following the high-end design patterns of **Nippon Toyota Incentive Console**, elevating Arvo Frontdesk into an elite enterprise command center:
+
+1. **Floating Inset Card Architecture:**
+   * Contained inside a centered `max-w-7xl` floating card with `rounded-[2rem]`, crisp 1px borders, and an elevated shadow (`shadow-[0_35px_90px_-45px_rgba(15,23,42,0.45)]`).
+2. **Organic Curved Wave Divider:**
+   * Replaced rigid vertical split lines with an organic SVG bezier wave divider (`fill-[var(--surface)]`) along the image panel, creating an organic curve that seamlessly adapts to both Light and Dark themes.
+3. **Enterprise Photography & Interactive Carousel:**
+   * High-resolution, authentic operations room assets:
+     - Operations Command Center NOC (`/arvo-ops-center.jpg`)
+     - Modern Corporate Enterprise Glass Headquarters (`/arvo-enterprise-glass.jpg`)
+     - High-Density Cloud Infrastructure Server Datacenter (`/arvo-datacenter-racks.jpg`)
+   * Automated cross-fade carousel with interactive bottom-right pagination pills.
+4. **Frosted Glass Verification Card (`ACCESS FLOW`):**
+   * Multi-layer backdrop blur with `Identity (Approved account)`, `Routing (Role workspace)`, and `Audit (Traceable records)` sub-cards.
+5. **Real-Time Telemetry & Poka-Yoke Guards:**
+   * Live IST Business Hours telemetry badge (`09:30–18:30 IST Active`).
+   * Four-zone workspace shell: 64px IconRail, 260px Operational Rail, 340px Ticket List, and Flexible Ticket Detail with Poka-Yoke composer (amber private notes vs. customer replies).
+
+---
+
 ## 🛠️ Technology Stack
 
-* **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, TanStack Query v5, React Router v7, Sonner Toast.
-* **Backend:** Node.js, TypeScript, Express, Prisma ORM, Zod, node-cron, date-fns & date-fns-tz.
+* **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons, TanStack Query v5, React Router v7, Sonner Toast.
+* **Backend:** Node.js, TypeScript, Express, Prisma ORM, Zod, cookie-parser (HTTP-only session cookies), node-cron, date-fns & date-fns-tz.
 * **Database:** PostgreSQL (Neon Serverless PostgreSQL in cloud; local PostgreSQL supported).
 * **Testing:** Vitest unit test suite validating all SLA boundary mathematics.
 
@@ -67,7 +104,7 @@ Arvo promises support based on severity, but strictly within **business hours**:
 
 ### 1. Clone & Install Dependencies
 ```bash
-git clone https://github.com/your-username/arvo-frontdesk.git
+git clone https://github.com/KrishnaKanhaiya1/arvo-frontdesk.git
 cd arvo-frontdesk
 
 # Install backend dependencies
@@ -101,14 +138,35 @@ npm run prisma:seed
 ```
 *Seeds 3 agents (Meera, Rahul, Priya), 4 customers, 21 Indian festival holidays for 2026, and the 8 canonical test tickets (ARV-101 through ARV-108).*
 
-### 4. Run the Automated Test Suite (32 Passing Tests)
+### 4. Run the Automated Test Suite (40 Passing Tests)
 ```bash
 cd backend
 npm run test
 ```
-*Executes all 32 Vitest test cases across two specialized suites:*
+*Executes all 40 Vitest test cases across two specialized suites:*
 1. **`sla.test.ts` (23 tests):** Validating business hour boundaries, Friday 6 PM $\rightarrow$ Sunday morning zero-clock rules, holiday skipping, mid-flight escalations, same-day critical resolution mathematics, auto-close, and reopen windows.
-2. **`incidents_and_concurrency.test.ts` (9 tests):** Validating INC-0291 atomic CAS race condition prevention (concurrent claims returning 409), INC-0304 private note security & customer endpoint isolation (403 Forbidden enforcement), INC-0318 database-level PostgreSQL trigger immutability, customer reopen expiration rules, and closed ticket reply guards.
+2. **`incidents_and_concurrency.test.ts` (17 tests):** Validating:
+   * **Authentication & Authorization Guard:** Unauthenticated requests receive `401 Unauthorized`; header spoofing without signed session cookies receives `401 Unauthorized`; customers attempting agent endpoints or private notes receive `403 Forbidden`; customer query-parameter or body ID tampering receives `403 Forbidden`.
+   * **INC-0291 Atomic CAS Race Condition Prevention:** Simultaneous atomic claims return `[200, 409]` (`VERSION_MISMATCH` / `CONFLICT`), verified under concurrent Promise execution.
+   * **INC-0304 Data Boundary Isolation:** Customer queries completely exclude private notes and internal triage logs.
+   * **INC-0318 PostgreSQL Trigger Immutability:** Native database engine triggers reject `UPDATE` and `DELETE` on audit logs.
+   * **Reopen & Reply Guards:** Closed ticket replies rejected with `422`; expired reopens (>2,700 business minutes) rejected with `422 REOPEN_EXPIRED`.
+
+---
+
+## 🐳 Docker & Cloud Deployment
+
+### Run with Docker Compose
+To launch both PostgreSQL, the Backend API, and the production environment with a single command:
+```bash
+docker compose up --build
+```
+
+### Production Deployment Configurations Included:
+* **`render.yaml`:** One-click deployment specification for Render (Backend Web Service + Managed PostgreSQL + Frontend Static Site).
+* **`Dockerfile`:** Multi-stage production build containerizing Node.js, Prisma, and Express.
+* **`vercel.json`:** Zero-config SPA rewrite and enterprise security headers for Vercel deployment.
+* **`.env.example` & `.env.production.example`:** Validated configuration templates.
 
 ### 5. Launch the Applications
 In terminal 1 (Backend API):

@@ -6,12 +6,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { requireAgentRole } from '../middleware/auth';
 import { ERROR_CODES } from '../types/contracts';
 
 const router = Router({ mergeParams: true });
 
 // ── GET /api/tickets/:key/audit ───────────────────────────────
-router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+// Restricted to authenticated agents and leads ONLY.
+router.get('/', requireAgentRole, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const key = String(req.params.key);
     const ticket = await prisma.ticket.findUnique({ where: { ticketKey: key } });

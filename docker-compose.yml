@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arvo-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: arvo_frontdesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d arvo_frontdesk"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: arvo-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://postgres:postgrespassword@postgres:5432/arvo_frontdesk?schema=public"
+      SESSION_SECRET: "c389bf44a1e944d18fa7a08b6f3458cd1234567890abcdef1234567890abcdef"
+      DEMO_PASSWORD: "arvo2026"
+      FRONTEND_URL: "http://localhost:5173"
+    ports:
+      - "3001:3001"
+
+volumes:
+  pgdata:

@@ -133,6 +133,7 @@ export interface TicketSummary {
   hasInternalNotes: boolean;     // count > 0 indicator only (never leak content)
   canReopen?: boolean;
   reopenWindowExpired?: boolean;
+  remainingReopenMinutes?: number | null;
   createdAt: string;             // ISO
   updatedAt: string;
   version: number;               // Optimistic concurrency
@@ -260,6 +261,7 @@ export interface ApiError {
 
 // Error codes
 export const ERROR_CODES = {
+  UNAUTHORIZED: 'UNAUTHORIZED',               // 401 — authentication required
   CONFLICT: 'CONFLICT',                       // 409 — ticket already claimed
   VERSION_MISMATCH: 'VERSION_MISMATCH',       // 409 — optimistic lock failure
   VALIDATION_ERROR: 'VALIDATION_ERROR',       // 422 — invalid input
@@ -267,6 +269,7 @@ export const ERROR_CODES = {
   FORBIDDEN: 'FORBIDDEN',                     // 403
   REOPEN_EXPIRED: 'REOPEN_EXPIRED',           // 422 — reopen window passed
   TICKET_NOT_ASSIGNED: 'TICKET_NOT_ASSIGNED', // 422 — must claim first
+  RATE_LIMITED: 'RATE_LIMITED',               // 429 — too many attempts
   INTERNAL_ERROR: 'INTERNAL_ERROR',           // 500
 } as const;
 

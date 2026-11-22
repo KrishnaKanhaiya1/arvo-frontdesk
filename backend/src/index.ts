@@ -1,7 +1,10 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import cron from 'node-cron';
 import { errorHandler, requestLogger } from './middleware/errorHandler';
+import { authenticate } from './middleware/auth';
+import authRouter from './routes/auth';
 import ticketsRouter from './routes/tickets';
 import notesRouter from './routes/notes';
 import auditRouter from './routes/audit';
@@ -14,10 +17,69 @@ import { runAutoClose } from './services/autoclose';
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
+
 // Middlewares
-app.use(cors({ origin: '*' }));
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      if (
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.endsWith('.vercel.app') ||
+        (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) ||
+        allowedOrigins.includes(origin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for untrusted origin: ${origin}`));
+    },
+    credentials: true,
+  })
+);
+
+// Mutation Origin Validation (CSRF Protection for cookie-authenticated state modifications)
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    const origin = req.headers.origin;
+    if (origin) {
+      const isAllowed =
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.endsWith('.vercel.app') ||
+        (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) ||
+        allowedOrigins.includes(origin);
+      if (!isAllowed) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Cross-site mutation origin rejected (CSRF protection).' }
+        });
+      }
+    }
+  }
+  next();
+});
+app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(requestLogger);
+app.use(authenticate);
 
 // Health check endpoint
 app.get('/api/health', (_req: Request, res: Response) => {
@@ -25,6 +87,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 // Mount Routes
+app.use('/api/auth', authRouter);
 app.use('/api/tickets/:key/notes', notesRouter);
 app.use('/api/tickets/:key/audit', auditRouter);
 app.use('/api/tickets', ticketsRouter);

@@ -1,11 +1,75 @@
 @import "tailwindcss";
 
 :root {
-  font-family: 'Inter', sans-serif;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Archivo', 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  
+  /* Arvo High-Precision Design System Tokens — Light */
+  --bg-app: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-subtle: #F1F5F9;
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
+  --content: #0F172A;
+  --content-subtle: #475569;
+  --muted: #64748B;
+  --subtle: #94A3B8;
+  
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --primary-subtle: #EFF6FF;
+  --primary-border: #BFDBFE;
+
+  --critical: #EF4444;
+  --critical-subtle: #FEF2F2;
+  --critical-border: #FECACA;
+
+  --warning: #F59E0B;
+  --warning-subtle: #FFFBEB;
+  --warning-border: #FDE68A;
+
+  --success: #10B981;
+  --success-subtle: #ECFDF5;
+  --success-border: #A7F3D0;
+
+  --card-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05);
+  --modal-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.1);
+}
+
+.dark {
+  /* Arvo High-Precision Design System Tokens — Dark */
+  --bg-app: #0B0F19;
+  --surface: #111827;
+  --surface-raised: #1F2937;
+  --surface-subtle: #182234;
+  --border: #1E293B;
+  --border-strong: #334155;
+  --content: #F8FAFC;
+  --content-subtle: #CBD5E1;
+  --muted: #94A3B8;
+  --subtle: #64748B;
+  
+  --primary: #3B82F6;
+  --primary-hover: #2563EB;
+  --primary-subtle: #172554;
+  --primary-border: #1E40AF;
+
+  --critical: #F87171;
+  --critical-subtle: #450A0A;
+  --critical-border: #7F1D1D;
+
+  --warning: #FBBF24;
+  --warning-subtle: #451A03;
+  --warning-border: #78350F;
+
+  --success: #34D399;
+  --success-subtle: #064E3B;
+  --success-border: #065F46;
+
+  --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --modal-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
 }
 
 body {
@@ -13,8 +77,12 @@ body {
   min-width: 320px;
   min-height: 100vh;
   overflow: hidden;
-  background: #F6F7F9;
-  color: #0F172A;
+  background-color: var(--bg-app);
+  color: var(--content);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
@@ -22,10 +90,17 @@ body {
   overflow: hidden;
 }
 
-/* Custom slim scrollbars */
+/* Tabular figures for numbers, timers, dates */
+.font-mono, [data-tabular] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Custom premium micro scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -33,33 +108,35 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 3px;
+  background: var(--border-strong);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+  background: var(--muted);
 }
 
-/* Monospace for ticket keys and timers */
-.font-mono {
-  font-family: 'JetBrains Mono', monospace;
-  font-variant-numeric: tabular-nums;
+/* Subtle dashboard background dot-grid utility */
+.dot-grid {
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
-/* Pulsing animation for active SLA timers */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+/* Slim scrollbar utility */
+.slim-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.slim-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
 }
 
-.pulse-dot {
-  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Smooth transitions */
-* {
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
+/* Accessibility & Transitions */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

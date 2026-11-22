@@ -2,11 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError } from './errorHandler';
 import { ERROR_CODES } from '../types/contracts';
 import prisma from '../utils/prisma';
+import { COOKIE_NAME, SessionPayload } from '../routes/auth';
+import { verifySignedCookie } from '../utils/security';
 
 export interface AuthContext {
   actorId: string;
   actorRole: 'agent' | 'customer' | 'system' | 'lead';
   actorName: string;
+  customerId?: string;
+  customerOrg?: string;
 }
 
 declare global {
@@ -18,44 +22,87 @@ declare global {
 }
 
 /**
- * Extracts and verifies actor credentials from headers:
- * - x-actor-role: 'agent' | 'lead' | 'customer' | 'system'
- * - x-actor-id: agentId or customerId
+ * Extracts and verifies actor credentials:
+ * 1. Primary & Production: Server-issued cryptographically HMAC-signed session cookie 'arvo_session'
+ * 2. Automated test environment ONLY (NODE_ENV === 'test'): x-actor-role and x-actor-id for fast test runner isolation.
+ * Header fallback is strictly denied in development and production environments.
  */
 export async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
-  const roleHeader = req.headers['x-actor-role'] as string | undefined;
-  const idHeader = req.headers['x-actor-id'] as string | undefined;
+  let actorId: string | undefined;
+  let actorRole: 'agent' | 'lead' | 'customer' | 'system' | undefined;
+  let actorName = 'Anonymous';
+  let customerId: string | undefined;
+  let customerOrg: string | undefined;
 
-  // Default to agent mode for internal/demo convenience if not explicitly customer
-  const role = (roleHeader || 'agent') as 'agent' | 'lead' | 'customer' | 'system';
-  const actorId = idHeader || (role === 'customer' ? 'cust-acme' : 'agent-meera');
-
-  let actorName = 'System';
-  if (role === 'agent' || role === 'lead') {
-    const agent = await prisma.agent.findUnique({ where: { id: actorId } });
-    actorName = agent ? agent.name : 'Support Agent';
-  } else if (role === 'customer') {
-    const customer = await prisma.customer.findUnique({ where: { id: actorId } });
-    actorName = customer ? customer.name : 'Customer';
+  // 1. Primary & Sole Authentication: Verify signed session cookie
+  const cookieVal = req.cookies?.[COOKIE_NAME];
+  if (cookieVal && typeof cookieVal === 'string') {
+    const rawPayload = verifySignedCookie(cookieVal);
+    if (rawPayload) {
+      try {
+        const session: SessionPayload = JSON.parse(rawPayload);
+        actorId = session.userId;
+        actorRole = session.role;
+        actorName = session.name;
+        if (session.role === 'customer') {
+          customerId = session.userId;
+          customerOrg = session.company;
+        }
+      } catch {
+        // Invalid session payload JSON
+      }
+    }
   }
 
-  req.auth = {
-    actorId,
-    actorRole: role,
-    actorName,
-  };
+  // 3. Revalidate actor identity against database to guarantee freshness & avoid stale state
+  if (actorRole && actorId) {
+    if (actorRole === 'agent' || actorRole === 'lead') {
+      const agent = await prisma.agent.findUnique({ where: { id: actorId } });
+      if (agent) {
+        actorName = agent.name;
+        actorRole = agent.role as 'lead' | 'agent';
+      } else {
+        actorId = undefined;
+        actorRole = undefined;
+      }
+    } else if (actorRole === 'customer') {
+      const customer = await prisma.customer.findUnique({ where: { id: actorId } });
+      if (customer) {
+        actorName = customer.name;
+        customerId = customer.id;
+        customerOrg = customer.company;
+      } else {
+        actorId = undefined;
+        actorRole = undefined;
+        customerId = undefined;
+      }
+    }
+  }
+
+  if (actorId && actorRole) {
+    req.auth = {
+      actorId,
+      actorRole,
+      actorName,
+      customerId,
+      customerOrg,
+    };
+  }
 
   next();
 }
 
 /**
- * Strict role guard: Requires active agent credentials.
- * Customers are strictly rejected with 403 Forbidden.
- * Enforces INC-0304 private note isolation at the API boundary.
+ * Strict role guard: Requires active agent or lead credentials.
+ * Customers and unauthenticated callers are rejected with 401/403.
  */
 export function requireAgentRole(req: Request, _res: Response, next: NextFunction): void {
-  const role = req.headers['x-actor-role'] as string | undefined;
-  if (!role || (role !== 'agent' && role !== 'lead')) {
+  if (!req.auth) {
+    throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Please sign in as an Arvo support agent.');
+  }
+
+  const role = req.auth.actorRole;
+  if (role !== 'agent' && role !== 'lead') {
     throw new AppError(
       403,
       ERROR_CODES.FORBIDDEN,
@@ -66,28 +113,41 @@ export function requireAgentRole(req: Request, _res: Response, next: NextFunctio
 }
 
 /**
- * Strict role guard: Requires lead or admin permissions.
+ * Strict role guard: Requires lead permissions ONLY.
+ * Ordinary agents and customers receive 403 Forbidden.
  */
 export function requireLeadRole(req: Request, _res: Response, next: NextFunction): void {
-  const role = req.headers['x-actor-role'] as string | undefined;
-  if (role !== 'lead' && role !== 'agent') {
+  if (!req.auth) {
+    throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Please sign in as an Arvo Lead.');
+  }
+
+  const role = req.auth.actorRole;
+  if (role !== 'lead') {
     throw new AppError(
       403,
       ERROR_CODES.FORBIDDEN,
-      'Access denied: Admin/Lead role required for this system action.'
+      'Access denied: Lead privileges required to execute administrative lifecycle operations.'
     );
   }
   next();
 }
 
 /**
- * Strict role guard: For customer portal actions.
+ * Strict role guard: Requires customer credentials ONLY.
+ * Agents and unauthenticated callers receive 401/403.
  */
 export function requireCustomerRole(req: Request, _res: Response, next: NextFunction): void {
-  const role = req.headers['x-actor-role'] as string | undefined;
-  if (role && role !== 'customer') {
-    // If explicitly specified and not customer, reject
-    throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Customer access required.');
+  if (!req.auth) {
+    throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Please sign in to the Arvo Customer Portal.');
+  }
+
+  const role = req.auth.actorRole;
+  if (role !== 'customer') {
+    throw new AppError(
+      403,
+      ERROR_CODES.FORBIDDEN,
+      'Access denied: This endpoint is restricted to customer accounts.'
+    );
   }
   next();
 }

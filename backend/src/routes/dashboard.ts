@@ -2,8 +2,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../utils/prisma';
 import { getCurrentTime } from '../services/clock';
 import { computeSLAState } from '../services/slaCompute';
+import { requireAgentRole } from '../middleware/auth';
 
 const router = Router();
+router.use(requireAgentRole);
 
 async function loadHolidays(): Promise<Date[]> {
   const rows = await prisma.holiday.findMany();

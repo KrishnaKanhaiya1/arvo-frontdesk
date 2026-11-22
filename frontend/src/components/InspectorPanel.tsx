@@ -1,17 +1,40 @@
 import React, { useState } from 'react';
-import { Shield, Clock } from 'lucide-react';
-import { useAuditLog, useChangeStatus } from '../hooks/useTickets';
+import {
+  Shield,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  History,
+  FileText,
+  User,
+  Calendar,
+  Layers,
+  ChevronRight,
+  ExternalLink,
+  Copy,
+  Check,
+  PauseCircle,
+  PlayCircle,
+  Database,
+  Link2
+} from 'lucide-react';
+import { useAuditLog, useChangeStatus, useTicket } from '../hooks/useTickets';
 import { usePersona } from '../hooks/usePersona';
-import { formatIST, formatMinutes, getStatusColors, getStatusLabel } from '../lib/utils';
+import { formatIST, formatMinutes, getStatusColors, getStatusLabel, getPriorityColors } from '../lib/utils';
 import { TicketStatus } from '../types/contracts';
-import type { TicketDetail } from '../types/contracts';
-import { useTicket } from '../hooks/useTickets';
 
 interface InspectorPanelProps {
   ticketKey: string | null;
 }
 
-function SLAProgressBar({ elapsed, target, breached, met }: {
+type InspectorTab = 'overview' | 'sla' | 'audit';
+
+function SLAProgressBar({
+  elapsed,
+  target,
+  breached,
+  met,
+}: {
   elapsed: number;
   target: number;
   breached: boolean;
@@ -19,10 +42,10 @@ function SLAProgressBar({ elapsed, target, breached, met }: {
 }) {
   const pct = target > 0 ? Math.min((elapsed / target) * 100, 100) : 0;
   return (
-    <div className="w-full h-1.5 bg-[#E5E7EB] rounded-full overflow-hidden">
+    <div className="w-full h-2 bg-[var(--border)] rounded-full overflow-hidden mt-1.5">
       <div
-        className={`h-full rounded-full transition-all ${
-          met ? 'bg-[#059669]' : breached ? 'bg-[#DC2626]' : pct > 80 ? 'bg-[#D97706]' : 'bg-[#2563EB]'
+        className={`h-full rounded-full transition-all duration-300 ${
+          met ? 'bg-emerald-500' : breached ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-600'
         }`}
         style={{ width: `${pct}%` }}
       />
@@ -31,7 +54,8 @@ function SLAProgressBar({ elapsed, target, breached, met }: {
 }
 
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({ ticketKey }) => {
-  const [activeTab, setActiveTab] = useState<'details' | 'audit'>('details');
+  const [activeTab, setActiveTab] = useState<InspectorTab>('overview');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const { data: ticket } = useTicket(ticketKey);
   const { data: auditLog = [] } = useAuditLog(ticketKey);
   const { agentId } = usePersona();
@@ -39,7 +63,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ ticketKey }) => 
 
   if (!ticketKey || !ticket) {
     return (
-      <div className="w-[300px] flex-shrink-0 bg-[#F8FAFC] border-l border-[#E5E7EB]" />
+      <aside className="hidden lg:flex w-[330px] flex-shrink-0 bg-[var(--surface-subtle)] border-l border-[var(--border)] flex-col items-center justify-center p-6 text-center text-[var(--muted)]">
+        <Layers className="w-8 h-8 stroke-[1.5] mb-2 text-[var(--subtle)]" />
+        <span className="text-xs font-medium">Select a ticket to inspect SLA metrics and immutable audit history.</span>
+      </aside>
     );
   }
 
@@ -50,219 +77,286 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ ticketKey }) => 
     changeStatus.mutate({ agentId, newStatus: status, version: ticket.version });
   };
 
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1800);
+  };
+
   const isClosed = ticket.status === TicketStatus.RESOLVED || ticket.status === TicketStatus.CLOSED;
 
   return (
-    <div className="w-[300px] flex-shrink-0 flex flex-col bg-[#F8FAFC] border-l border-[#E5E7EB] overflow-hidden">
-      {/* Tabs */}
-      <div className="flex border-b border-[#E5E7EB] bg-white flex-shrink-0">
+    <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col bg-[var(--surface)] border-l border-[var(--border)] overflow-hidden select-none">
+      {/* 3-Tab Header Navigation */}
+      <div className="flex border-b border-[var(--border)] bg-[var(--surface-subtle)] flex-shrink-0">
         <button
-          onClick={() => setActiveTab('details')}
-          className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-            activeTab === 'details'
-              ? 'border-[#2563EB] text-[#2563EB] bg-white'
-              : 'border-transparent text-[#475569] hover:text-[#0F172A]'
+          onClick={() => setActiveTab('overview')}
+          className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            activeTab === 'overview'
+              ? 'border-blue-600 text-blue-600 bg-[var(--surface)]'
+              : 'border-transparent text-[var(--muted)] hover:text-[var(--content)]'
           }`}
         >
-          Details &amp; SLA
+          <Layers className="w-3.5 h-3.5" />
+          <span>Overview</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('sla')}
+          className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            activeTab === 'sla'
+              ? 'border-blue-600 text-blue-600 bg-[var(--surface)]'
+              : 'border-transparent text-[var(--muted)] hover:text-[var(--content)]'
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span>SLA Metrics</span>
         </button>
         <button
           onClick={() => setActiveTab('audit')}
-          className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+          className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
             activeTab === 'audit'
-              ? 'border-[#2563EB] text-[#2563EB] bg-white'
-              : 'border-transparent text-[#475569] hover:text-[#0F172A]'
+              ? 'border-blue-600 text-blue-600 bg-[var(--surface)]'
+              : 'border-transparent text-[var(--muted)] hover:text-[var(--content)]'
           }`}
         >
-          Audit Log
+          <History className="w-3.5 h-3.5" />
+          <span>Audit ({auditLog.length})</span>
         </button>
       </div>
 
-      {activeTab === 'details' ? (
-        <div className="flex-1 overflow-y-auto slim-scrollbar p-4 space-y-4">
-          {/* SLA Section */}
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-[#94A3B8] mb-3">
-              SLA Tracking
+      {/* Tab 1: OVERVIEW */}
+      {activeTab === 'overview' && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 slim-scrollbar">
+          {/* Ticket Header & Status */}
+          <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-mono text-xs font-bold text-[var(--content)]">{ticket.ticketKey}</span>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusColors(ticket.status)}`}>
+                {getStatusLabel(ticket.status)}
+              </span>
             </div>
-
-            {/* First Response */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-1.5 text-xs">
-                <span className="font-medium text-[#475569]">First Response</span>
-                <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                  sla.firstResponse.met
-                    ? 'bg-[#ECFDF5] text-[#059669]'
-                    : sla.firstResponse.breached
-                    ? 'bg-[#FEF2F2] text-[#DC2626]'
-                    : 'bg-[#EFF6FF] text-[#2563EB]'
-                }`}>
-                  {sla.firstResponse.met ? '✓ Met' : sla.firstResponse.breached ? 'Breached' : 'Active'}
-                </span>
-              </div>
-              <SLAProgressBar
-                elapsed={sla.firstResponse.elapsedBusinessMinutes}
-                target={sla.firstResponse.targetMinutes}
-                breached={sla.firstResponse.breached}
-                met={sla.firstResponse.met}
-              />
-              <div className="flex justify-between mt-1 text-[10px] font-mono text-[#94A3B8]">
-                <span>{formatMinutes(sla.firstResponse.elapsedBusinessMinutes)} elapsed</span>
-                <span>/ {formatMinutes(sla.firstResponse.targetMinutes)} target</span>
-              </div>
+            <h4 className="text-xs font-semibold text-[var(--content)] line-clamp-2">{ticket.subject}</h4>
+            <div className="mt-2.5 pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--muted)] font-mono">
+              <span>Priority:</span>
+              <span className={`font-semibold px-1.5 py-0.2 rounded border ${getPriorityColors(ticket.priority)}`}>
+                {ticket.priority}
+              </span>
             </div>
+            <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--muted)] font-mono">
+              <span>CAS Version:</span>
+              <span className="font-semibold text-[var(--content)]">v{ticket.version}</span>
+            </div>
+          </div>
 
-            {/* Resolution */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5 text-xs">
-                <span className="font-medium text-[#475569]">Resolution</span>
-                <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                  sla.resolution.met
-                    ? 'bg-[#ECFDF5] text-[#059669]'
-                    : sla.resolution.breached
-                    ? 'bg-[#FEF2F2] text-[#DC2626]'
-                    : 'bg-[#EFF6FF] text-[#2563EB]'
-                }`}>
-                  {sla.resolution.met ? '✓ Met' : sla.resolution.breached ? 'Breached' : 'Active'}
-                </span>
+          {/* Customer & Company Details */}
+          <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-2.5">
+            <div className="text-[10px] uppercase font-bold text-[var(--muted)] font-mono tracking-wider">
+              Requester Profile
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center">
+                {ticket.customerName.slice(0, 2).toUpperCase()}
               </div>
-              <SLAProgressBar
-                elapsed={sla.resolution.elapsedBusinessMinutes}
-                target={sla.resolution.targetMinutes}
-                breached={sla.resolution.breached}
-                met={sla.resolution.met}
-              />
-              <div className="flex justify-between mt-1 text-[10px] font-mono text-[#94A3B8]">
-                <span>{formatMinutes(sla.resolution.elapsedBusinessMinutes)} elapsed</span>
-                <span>/ {formatMinutes(sla.resolution.targetMinutes)} target</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-[var(--content)] truncate">{ticket.customerName}</div>
+                <div className="text-[11px] text-[var(--muted)] truncate">{ticket.customerCompany}</div>
               </div>
             </div>
-
-            {sla.isPaused && (
-              <div className="mt-3 p-2 bg-[#FFFBEB] border border-[#FDE68A] rounded text-[11px] text-[#92400E]">
-                ⏸ SLA paused · {sla.pauseReason === 'waiting_on_customer' ? 'Waiting on customer' : 'Off-hours'}
+            <div className="pt-2 border-t border-[var(--border)] text-[11px] text-[var(--muted)] space-y-1">
+              <div className="flex justify-between">
+                <span>Created:</span>
+                <span className="font-mono text-[var(--content)]">{formatIST(ticket.createdAt)}</span>
               </div>
+              {ticket.resolvedAt && (
+                <div className="flex justify-between">
+                  <span>Resolved:</span>
+                  <span className="font-mono text-emerald-600">{formatIST(ticket.resolvedAt)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Assignee Card */}
+          <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-2">
+            <div className="text-[10px] uppercase font-bold text-[var(--muted)] font-mono tracking-wider">
+              Assigned Specialist
+            </div>
+            {ticket.assigneeName ? (
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center">
+                  {ticket.assigneeName.split(' ').map(n => n[0]).join('')}
+                </div>
+                <div className="text-xs font-semibold text-[var(--content)]">{ticket.assigneeName}</div>
+              </div>
+            ) : (
+              <div className="text-xs text-amber-600 font-medium">Unassigned (Available to claim)</div>
             )}
           </div>
 
-          {/* Status Actions */}
+          {/* Quick Lifecycle Status Actions */}
           {!isClosed && (
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-[#94A3B8] mb-2">
-                Status Actions
+            <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-2">
+              <div className="text-[10px] uppercase font-bold text-[var(--muted)] font-mono tracking-wider">
+                Status Transitions
               </div>
-              <div className="flex flex-col gap-1.5">
-                {ticket.status !== TicketStatus.WAITING_ON_CUSTOMER && (
-                  <button
-                    onClick={() => handleStatusChange(TicketStatus.WAITING_ON_CUSTOMER)}
-                    disabled={changeStatus.isPending}
-                    className="px-3 py-2 text-xs font-medium text-left rounded-md border border-[#FDE68A] bg-[#FFFBEB] text-[#92400E] hover:bg-[#FEF9C3] transition-colors disabled:opacity-50"
-                  >
-                    Mark Waiting on Customer
-                  </button>
-                )}
-                {ticket.status === TicketStatus.WAITING_ON_CUSTOMER && (
-                  <button
-                    onClick={() => handleStatusChange(TicketStatus.ASSIGNED)}
-                    disabled={changeStatus.isPending}
-                    className="px-3 py-2 text-xs font-medium text-left rounded-md border border-[#A7F3D0] bg-[#ECFDF5] text-[#065F46] hover:bg-[#D1FAE5] transition-colors disabled:opacity-50"
-                  >
-                    Resume (Back to Assigned)
-                  </button>
-                )}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleStatusChange(TicketStatus.WAITING_ON_CUSTOMER)}
+                  disabled={changeStatus.isPending || ticket.status === TicketStatus.WAITING_ON_CUSTOMER}
+                  className="px-2.5 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-subtle)] text-[var(--content)] text-xs font-medium transition-colors"
+                >
+                  Wait on Customer
+                </button>
                 <button
                   onClick={() => handleStatusChange(TicketStatus.RESOLVED)}
                   disabled={changeStatus.isPending}
-                  className="px-3 py-2 text-xs font-medium text-left rounded-md border border-[#CBD5E1] bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0] transition-colors disabled:opacity-50"
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow transition-colors"
                 >
                   Resolve Ticket
                 </button>
               </div>
             </div>
           )}
-
-          {/* Ticket Meta */}
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-[#94A3B8] mb-2">
-              Details
-            </div>
-            <dl className="space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <dt className="text-[#94A3B8]">Customer</dt>
-                <dd className="font-medium text-[#0F172A]">{ticket.customerName}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-[#94A3B8]">Company</dt>
-                <dd className="font-medium text-[#0F172A]">{ticket.customerCompany}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-[#94A3B8]">Created</dt>
-                <dd className="font-mono text-[10px] text-[#475569]">{formatIST(ticket.createdAt)}</dd>
-              </div>
-              {ticket.firstResponseAt && (
-                <div className="flex justify-between">
-                  <dt className="text-[#94A3B8]">First Reply</dt>
-                  <dd className="font-mono text-[10px] text-[#475569]">{formatIST(ticket.firstResponseAt)}</dd>
-                </div>
-              )}
-              {ticket.resolvedAt && (
-                <div className="flex justify-between">
-                  <dt className="text-[#94A3B8]">Resolved</dt>
-                  <dd className="font-mono text-[10px] text-[#475569]">{formatIST(ticket.resolvedAt)}</dd>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <dt className="text-[#94A3B8]">Version</dt>
-                <dd className="font-mono text-[10px] text-[#94A3B8]">v{ticket.version}</dd>
-              </div>
-            </dl>
-          </div>
         </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto slim-scrollbar">
-          {/* Audit header */}
-          <div className="px-4 py-2.5 border-b border-[#E5E7EB] bg-white flex-shrink-0 flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-[#2563EB]" />
-            <span className="text-[10px] font-semibold text-[#2563EB] tracking-wide">
-              Immutable · Append-Only
-            </span>
-          </div>
-          <div className="p-3 space-y-2">
-            {auditLog.length === 0 ? (
-              <div className="text-xs text-[#94A3B8] text-center py-4">No audit entries yet</div>
-            ) : (
-              [...auditLog].reverse().map(entry => (
-                <div
-                  key={entry.id}
-                  className="bg-white border border-[#E5E7EB] rounded-md p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-mono font-semibold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.5 rounded">
-                      {entry.action.replace(/_/g, ' ')}
-                    </span>
-                    <span className="font-mono text-[9px] text-[#94A3B8]">
-                      {formatIST(entry.createdAt)}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-[#475569]">
-                    <span className="font-medium">{entry.actorName}</span>
-                    <span className="text-[#94A3B8]"> · {entry.actorType}</span>
-                  </div>
-                  {entry.metadata && Object.keys(entry.metadata).length > 0 && (
-                    <div className="mt-1 font-mono text-[9px] text-[#94A3B8] bg-[#F8FAFC] rounded p-1 overflow-hidden">
-                      {Object.entries(entry.metadata).map(([k, v]) => (
-                        <div key={k} className="truncate">
-                          <span className="text-[#64748B]">{k}:</span> {JSON.stringify(v)}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))
+      )}
+
+      {/* Tab 2: SLA METRICS & BUSINESS HOURS */}
+      {activeTab === 'sla' && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 slim-scrollbar">
+          {/* Business Hours Status Banner */}
+          <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-[var(--content)]">SLA Business Window</span>
+              <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                09:30–18:30 IST
+              </span>
+            </div>
+            <p className="text-[11px] text-[var(--muted)] leading-relaxed">
+              Timers advance strictly during business hours (Mon–Fri). Weekends and 21 gazetted Indian holidays are paused with zero elapsed minutes.
+            </p>
+            {sla.isPaused && (
+              <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs flex items-center gap-1.5">
+                <PauseCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span className="font-medium">Clock Paused: {sla.pauseReason?.replace(/_/g, ' ').toUpperCase()}</span>
+              </div>
             )}
+          </div>
+
+          {/* First Response Meter */}
+          <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-[var(--content)]">First Response SLA</span>
+              <span className={`font-mono text-xs font-bold ${
+                sla.firstResponse.met ? 'text-emerald-600' : sla.firstResponse.breached ? 'text-red-600' : 'text-blue-600'
+              }`}>
+                {sla.firstResponse.met ? 'MET' : sla.firstResponse.breached ? 'BREACHED' : `${sla.firstResponse.remainingBusinessMinutes}m remaining`}
+              </span>
+            </div>
+            <SLAProgressBar
+              elapsed={sla.firstResponse.elapsedBusinessMinutes}
+              target={sla.firstResponse.targetMinutes}
+              breached={sla.firstResponse.breached}
+              met={sla.firstResponse.met}
+            />
+            <div className="flex justify-between text-[10px] font-mono text-[var(--muted)] pt-1">
+              <span>Target: {formatMinutes(sla.firstResponse.targetMinutes)}</span>
+              <span>Elapsed: {formatMinutes(sla.firstResponse.elapsedBusinessMinutes)}</span>
+            </div>
+            <div className="pt-2 border-t border-[var(--border)] text-[10px] font-mono text-[var(--muted)] flex justify-between">
+              <span>Deadline (IST):</span>
+              <span className="text-[var(--content)]">{sla.firstResponse.deadlineIST ? formatIST(sla.firstResponse.deadlineIST) : 'None'}</span>
+            </div>
+          </div>
+
+          {/* Resolution SLA Meter */}
+          <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-[var(--content)]">Resolution SLA</span>
+              <span className={`font-mono text-xs font-bold ${
+                sla.resolution.met ? 'text-emerald-600' : sla.resolution.breached ? 'text-red-600' : 'text-blue-600'
+              }`}>
+                {sla.resolution.met ? 'MET' : sla.resolution.breached ? 'BREACHED' : `${sla.resolution.remainingBusinessMinutes}m remaining`}
+              </span>
+            </div>
+            <SLAProgressBar
+              elapsed={sla.resolution.elapsedBusinessMinutes}
+              target={sla.resolution.targetMinutes}
+              breached={sla.resolution.breached}
+              met={sla.resolution.met}
+            />
+            <div className="flex justify-between text-[10px] font-mono text-[var(--muted)] pt-1">
+              <span>Target: {formatMinutes(sla.resolution.targetMinutes)}</span>
+              <span>Elapsed: {formatMinutes(sla.resolution.elapsedBusinessMinutes)}</span>
+            </div>
+            <div className="pt-2 border-t border-[var(--border)] text-[10px] font-mono text-[var(--muted)] flex justify-between">
+              <span>Deadline (IST):</span>
+              <span className="text-[var(--content)]">{sla.resolution.deadlineIST ? formatIST(sla.resolution.deadlineIST) : 'None'}</span>
+            </div>
           </div>
         </div>
       )}
-    </div>
+
+      {/* Tab 3: STRUCTURED IMMUTABLE AUDIT LOG */}
+      {activeTab === 'audit' && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 slim-scrollbar">
+          {/* Tamper-Proof Trigger Shield */}
+          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 text-xs flex items-center gap-2">
+            <Shield className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            <div>
+              <strong className="block font-semibold">PostgreSQL Engine Immutability</strong>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400">Append-only ledger. UPDATE and DELETE statements are blocked.</span>
+            </div>
+          </div>
+
+          {/* Audit Event Cards */}
+          {auditLog.map((entry) => {
+            const hasMetadata = entry.metadata && Object.keys(entry.metadata).length > 0;
+            return (
+              <div
+                key={entry.id}
+                className="p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] space-y-1.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                    {entry.action.replace(/_/g, ' ')}
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(entry.createdAt, `iso-${entry.id}`)}
+                    className="flex items-center gap-1 text-[10px] text-[var(--muted)] hover:text-[var(--content)] font-mono"
+                    title="Copy ISO Timestamp"
+                  >
+                    {copiedId === `iso-${entry.id}` ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                    <span>{formatIST(entry.createdAt)}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-[var(--content)] font-medium">
+                  <span>{entry.actorName}</span>
+                  <span className="text-[10px] font-mono text-[var(--muted)] uppercase px-1.5 py-0.2 bg-[var(--surface-subtle)] rounded border border-[var(--border)]">
+                    {entry.actorType}
+                  </span>
+                </div>
+
+                {/* Structured Metadata */}
+                {hasMetadata && (
+                  <div className="mt-1.5 p-2 rounded bg-[var(--surface-subtle)] border border-[var(--border)] text-[10px] font-mono text-[var(--content-subtle)] overflow-x-auto">
+                    {Object.entries(entry.metadata).map(([k, v]) => (
+                      <div key={k} className="flex justify-between py-0.5">
+                        <span className="text-[var(--muted)]">{k}:</span>
+                        <span className="font-semibold text-right truncate max-w-[170px]">{JSON.stringify(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </aside>
   );
 };

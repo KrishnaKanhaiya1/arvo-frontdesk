@@ -1,18 +1,19 @@
 import React from 'react';
 import { usePersona } from '../hooks/usePersona';
 import { useNavigate } from 'react-router-dom';
+import { Users, LogIn, LogOut } from 'lucide-react';
 
 export const PersonaSwitcher: React.FC = () => {
-  const { mode, agentId, setAgentPersona, setCustomerPersona } = usePersona();
+  const { mode, agentId, setAgentPersona, setCustomerPersona, logout } = usePersona();
   const navigate = useNavigate();
 
-  const handleAgentSelect = (id: string) => {
-    setAgentPersona(id);
+  const handleAgentSelect = async (id: string) => {
+    await setAgentPersona(id);
     navigate('/');
   };
 
-  const handleCustomerSelect = () => {
-    setCustomerPersona();
+  const handleCustomerSelect = async () => {
+    await setCustomerPersona();
     navigate('/customer');
   };
 
@@ -23,35 +24,58 @@ export const PersonaSwitcher: React.FC = () => {
   ];
 
   return (
-    <div className="flex items-center bg-[#E2E8F0] p-0.5 rounded-lg text-xs font-medium">
-      {personas.map(p => {
-        const isActive = mode === 'agent' && agentId === p.id;
-        return (
-          <button
-            key={p.id}
-            onClick={() => handleAgentSelect(p.id)}
-            className={`px-2.5 py-1 rounded-md transition-all ${
-              isActive
-                ? 'bg-white text-[#0F172A] shadow-sm font-semibold'
-                : 'text-[#64748B] hover:text-[#0F172A]'
-            }`}
-          >
-            {p.label}
-          </button>
-        );
-      })}
+    <div className="flex items-center gap-2">
+      <div className="flex items-center bg-[var(--surface-subtle)] p-0.5 rounded-lg border border-[var(--border)]">
+        {/* Agents */}
+        <div className="flex items-center gap-0.5">
+          {personas.map((p) => {
+            const isActive = mode === 'agent' && agentId === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => handleAgentSelect(p.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-[var(--surface)] text-[var(--content)] font-semibold shadow-xs ring-1 ring-black/5'
+                    : 'text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface)]/50'
+                }`}
+                title={`Switch session to ${p.label}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-blue-600' : 'bg-transparent'}`} />
+                <span>{p.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-      <div className="w-[1px] h-3.5 bg-slate-300 mx-1" />
+        <div className="w-[1px] h-3.5 bg-[var(--border)] mx-1" />
 
+        {/* Customer Mode */}
+        <button
+          onClick={handleCustomerSelect}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
+            mode === 'customer'
+              ? 'bg-blue-600 text-white font-semibold shadow-xs'
+              : 'text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface)]/50'
+          }`}
+          title="Switch to customer portal (Vikram / ACME Corp)"
+        >
+          <Users className="w-3 h-3" />
+          <span>Customer Portal</span>
+        </button>
+      </div>
+
+      {/* Clean Single Sign Out Action */}
       <button
-        onClick={handleCustomerSelect}
-        className={`px-2.5 py-1 rounded-md transition-all ${
-          mode === 'customer'
-            ? 'bg-[#2563EB] text-white shadow-sm font-semibold'
-            : 'text-[#64748B] hover:text-[#0F172A]'
-        }`}
+        onClick={async () => {
+          await logout();
+          navigate('/login');
+        }}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-[var(--muted)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/40 border border-[var(--border)] transition-all cursor-pointer shadow-xs"
+        title="Sign out of Arvo Frontdesk"
       >
-        Customer View
+        <LogOut className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Sign Out</span>
       </button>
     </div>
   );

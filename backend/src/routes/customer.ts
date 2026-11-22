@@ -1,8 +1,9 @@
 /**
- * Customer Routes — INC-0304 PROOF
+ * Customer Routes — INC-0304 PROOF & SECURE CUSTOMER ISOLATION
  * NEVER queries internal_notes table.
  * NEVER imports from notes.ts.
  * Filters out INTERNAL_NOTE_ADDED from audit.
+ * Enforces strict session-derived customer ownership on every single endpoint.
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
@@ -10,15 +11,19 @@ import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { getCurrentTime } from '../services/clock';
 import { computeSLAState } from '../services/slaCompute';
-import { calculateBusinessMinutesBetween } from '../services/sla';
+import { calculateBusinessMinutesBetween, calculateInitialResolutionTarget, calculateResolutionDeadline, addBusinessMinutes } from '../services/sla';
 import { AppError } from '../middleware/errorHandler';
+import { requireCustomerRole } from '../middleware/auth';
 import {
   AuditAction,
   ERROR_CODES,
   REOPEN_WINDOW_MINUTES,
+  SLA_TARGETS,
+  TicketPriority,
 } from '../types/contracts';
 
 const router = Router();
+router.use(requireCustomerRole);
 
 async function loadHolidays(): Promise<Date[]> {
   const rows = await prisma.holiday.findMany();
@@ -33,6 +38,7 @@ function formatCustomerTicket(ticket: any, currentTime: Date, holidays: Date[], 
     : 0;
   const canReopen = ticket.status === 'RESOLVED' && bizMinsSinceResolved <= REOPEN_WINDOW_MINUTES;
   const reopenWindowExpired = ticket.status === 'CLOSED' || (ticket.status === 'RESOLVED' && bizMinsSinceResolved > REOPEN_WINDOW_MINUTES);
+  const remainingReopenMinutes = ticket.status === 'RESOLVED' ? Math.max(0, REOPEN_WINDOW_MINUTES - bizMinsSinceResolved) : 0;
 
   const base = {
     id: ticket.id,
@@ -46,9 +52,10 @@ function formatCustomerTicket(ticket: any, currentTime: Date, holidays: Date[], 
     assigneeId: ticket.assigneeId ?? null,
     assigneeName: ticket.assignee?.name ?? null,
     sla,
-    hasInternalNotes: false, // NEVER expose to customers
+    hasInternalNotes: false, // NEVER expose internal notes existence to customers
     canReopen,
     reopenWindowExpired,
+    remainingReopenMinutes,
     createdAt: ticket.createdAt.toISOString(),
     updatedAt: ticket.updatedAt.toISOString(),
     version: ticket.version,
@@ -85,16 +92,25 @@ const customerTicketInclude = {
   messages: { orderBy: { createdAt: 'asc' as const } },
 };
 
-// ── GET /api/customer/tickets?customerId=X ────────────────────
+// ── GET /api/customer/tickets ─────────────────────────────────
+// Customer identity is strictly derived from the authenticated session.
 router.get('/tickets', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { customerId } = req.query as Record<string, string>;
-    if (!customerId) throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'customerId is required');
+    const authenticatedCustomerId = req.auth?.customerId;
+    if (!authenticatedCustomerId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Missing customer session.');
+    }
+
+    // Reject attempts to probe other customer accounts via query param
+    const requestedCustomerId = (req.query as Record<string, string>).customerId;
+    if (requestedCustomerId && requestedCustomerId !== authenticatedCustomerId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Access denied: You cannot access tickets belonging to another customer organization.');
+    }
 
     const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
 
     const tickets = await prisma.ticket.findMany({
-      where: { customerId },
+      where: { customerId: authenticatedCustomerId },
       include: {
         customer: true,
         assignee: true,
@@ -114,6 +130,11 @@ router.get('/tickets', async (req: Request, res: Response, next: NextFunction) =
 // ── GET /api/customer/tickets/:key ────────────────────────────
 router.get('/tickets/:key', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authenticatedCustomerId = req.auth?.customerId;
+    if (!authenticatedCustomerId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Missing customer session.');
+    }
+
     const key = String(req.params.key);
     const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
 
@@ -122,6 +143,11 @@ router.get('/tickets/:key', async (req: Request, res: Response, next: NextFuncti
       include: customerTicketInclude,
     });
     if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
+
+    // Strict ownership verification: Customers may ONLY read their own tickets
+    if (ticket.customerId !== authenticatedCustomerId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Access denied: You do not own this ticket.');
+    }
 
     const data = formatCustomerTicket(ticket, currentTime, holidays, true);
     res.json({ success: true, data, timestamp: new Date().toISOString() });
@@ -134,11 +160,21 @@ router.get('/tickets/:key', async (req: Request, res: Response, next: NextFuncti
 // Filters out any INTERNAL_NOTE_ADDED audit entries (INC-0304/0318 proof)
 router.get('/tickets/:key/audit', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authenticatedCustomerId = req.auth?.customerId;
+    if (!authenticatedCustomerId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Missing customer session.');
+    }
+
     const key = String(req.params.key);
     const ticket = await prisma.ticket.findUnique({
       where: { ticketKey: key },
     });
     if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
+
+    // Verify ownership
+    if (ticket.customerId !== authenticatedCustomerId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Access denied: You do not own this ticket.');
+    }
 
     const entries = await prisma.auditLog.findMany({
       where: {
@@ -168,13 +204,18 @@ router.get('/tickets/:key/audit', async (req: Request, res: Response, next: Next
 
 // ── POST /api/customer/tickets/:key/reply ─────────────────────
 const CustomerReplySchema = z.object({
-  customerId: z.string().min(1),
-  content: z.string().min(1),
+  content: z.string().min(1, 'Message content cannot be empty.'),
   reopen: z.boolean().optional(),
+  version: z.number().int().optional(),
 });
 
 router.post('/tickets/:key/reply', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authenticatedCustomerId = req.auth?.customerId;
+    if (!authenticatedCustomerId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Missing customer session.');
+    }
+
     const key = String(req.params.key);
     const body = CustomerReplySchema.parse(req.body);
     const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
@@ -182,15 +223,24 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({ where: { ticketKey: key } });
       if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
-      if (ticket.customerId !== body.customerId) {
-        throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Not your ticket.');
-      }
-      if (ticket.status === 'CLOSED') {
-        throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'This ticket is closed. Please create a new ticket.');
+
+      // Verify ownership
+      if (ticket.customerId !== authenticatedCustomerId) {
+        throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Access denied: You do not own this ticket.');
       }
 
-      const customer = await tx.customer.findUnique({ where: { id: body.customerId } });
-      if (!customer) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Customer not found');
+      // Closed tickets cannot receive replies
+      if (ticket.status === 'CLOSED') {
+        throw new AppError(
+          422,
+          ERROR_CODES.VALIDATION_ERROR,
+          'This ticket is closed and cannot receive replies. Please create a linked follow-up ticket.',
+          { canCreateLinkedTicket: true, originalTicketKey: ticket.ticketKey }
+        );
+      }
+
+      const customer = await tx.customer.findUnique({ where: { id: authenticatedCustomerId } });
+      if (!customer) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Customer profile not found');
 
       const updateData: any = {
         version: { increment: 1 },
@@ -199,7 +249,7 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
       let isReopening = false;
       let bizMinsSinceResolved = 0;
 
-      // Handle Reopening if resolved or requested
+      // Handle Reopening if resolved or explicitly requested
       if (ticket.status === 'RESOLVED' || body.reopen) {
         if (!ticket.resolvedAt) {
           throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Ticket has no resolution timestamp.');
@@ -215,7 +265,7 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
           throw new AppError(
             422,
             ERROR_CODES.REOPEN_EXPIRED,
-            'Reopen window has expired (5 working days). Please create a new ticket.',
+            'The 5-working-day reopen window has elapsed for this ticket. Please create a linked follow-up ticket.',
             { canCreateLinkedTicket: true, originalTicketKey: ticket.ticketKey }
           );
         }
@@ -227,11 +277,11 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
         updateData.slaResolutionMetAt = null;
         updateData.slaLastTickAt = currentTime;
       } else if (ticket.status === 'WAITING_ON_CUSTOMER') {
-        // If WAITING_ON_CUSTOMER → resume SLA
+        // If WAITING_ON_CUSTOMER → customer reply automatically resumes SLA clock
         const pausedMins = ticket.waitingOnCustomerSince
           ? calculateBusinessMinutesBetween(ticket.waitingOnCustomerSince, currentTime, holidays)
           : 0;
-        updateData.status = 'ASSIGNED';
+        updateData.status = ticket.assigneeId ? 'ASSIGNED' : 'OPEN';
         updateData.isPaused = false;
         updateData.totalPausedMinutes = ticket.totalPausedMinutes + pausedMins;
         updateData.waitingOnCustomerSince = null;
@@ -239,10 +289,11 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
       }
 
       // Atomic Compare-And-Swap update
+      const targetVersion = body.version ?? ticket.version;
       const updateRes = await tx.ticket.updateMany({
         where: {
           id: ticket.id,
-          version: ticket.version,
+          version: targetVersion,
         },
         data: updateData,
       });
@@ -261,7 +312,7 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
           ticketId: ticket.id,
           type: 'CUSTOMER',
           content: body.content,
-          customerId: body.customerId,
+          customerId: authenticatedCustomerId,
           senderName: customer.name,
           createdAt: currentTime,
         },
@@ -272,7 +323,7 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: AuditAction.CUSTOMER_REPLIED,
-          actorId: body.customerId,
+          actorId: authenticatedCustomerId,
           actorName: customer.name,
           actorType: 'customer',
           metadata: {
@@ -289,7 +340,7 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
             ticketId: ticket.id,
             ticketKey: ticket.ticketKey,
             action: AuditAction.TICKET_REOPENED,
-            actorId: body.customerId,
+            actorId: authenticatedCustomerId,
             actorName: customer.name,
             actorType: 'customer',
             metadata: {
@@ -329,7 +380,7 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
     res.json({ success: true, data, timestamp: new Date().toISOString() });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      next(new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Validation failed', { issues: err.issues }));
+      next(new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Validation failed: ' + err.issues[0]?.message, { issues: err.issues }));
     } else {
       next(err);
     }
@@ -338,11 +389,16 @@ router.post('/tickets/:key/reply', async (req: Request, res: Response, next: Nex
 
 // ── POST /api/customer/tickets/:key/reopen ────────────────────
 const ReopenSchema = z.object({
-  customerId: z.string().min(1),
+  version: z.number().int().optional(),
 });
 
 router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authenticatedCustomerId = req.auth?.customerId;
+    if (!authenticatedCustomerId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Missing customer session.');
+    }
+
     const key = String(req.params.key);
     const body = ReopenSchema.parse(req.body);
     const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
@@ -352,8 +408,10 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
       include: customerTicketInclude,
     });
     if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
-    if (ticket.customerId !== body.customerId) {
-      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Not your ticket.');
+
+    // Verify ownership
+    if (ticket.customerId !== authenticatedCustomerId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Access denied: You do not own this ticket.');
     }
     if (ticket.status !== 'RESOLVED') {
       throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Only resolved tickets can be reopened.');
@@ -363,7 +421,7 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
       throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Ticket has no resolution timestamp.');
     }
 
-    // Check reopen window
+    // Check 5-working-day reopen window (2,700 business minutes)
     const bizMinsSinceResolved = calculateBusinessMinutesBetween(
       ticket.resolvedAt,
       currentTime,
@@ -375,7 +433,7 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
         success: false,
         error: {
           code: ERROR_CODES.REOPEN_EXPIRED,
-          message: 'Reopen window has expired (5 working days). Please create a new ticket.',
+          message: 'The 5-working-day reopen window has expired. Please create a linked follow-up ticket.',
           details: { canCreateLinkedTicket: true, originalTicketKey: ticket.ticketKey },
         },
         timestamp: new Date().toISOString(),
@@ -383,13 +441,18 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
       return;
     }
 
-    const customer = await prisma.customer.findUnique({ where: { id: body.customerId } });
+    const customer = await prisma.customer.findUnique({ where: { id: authenticatedCustomerId } });
 
     const result = await prisma.$transaction(async (tx) => {
       const newStatus = ticket.assigneeId ? 'ASSIGNED' : 'OPEN';
 
-      const updated = await tx.ticket.update({
-        where: { id: ticket.id },
+      const targetVersion = body.version ?? ticket.version;
+      const updateRes = await tx.ticket.updateMany({
+        where: {
+          id: ticket.id,
+          version: targetVersion,
+          status: 'RESOLVED',
+        },
         data: {
           status: newStatus,
           resolvedAt: null,
@@ -398,6 +461,18 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
           slaLastTickAt: currentTime,
           version: { increment: 1 },
         },
+      });
+
+      if (updateRes.count !== 1) {
+        throw new AppError(
+          409,
+          ERROR_CODES.VERSION_MISMATCH,
+          'Ticket was updated concurrently by another actor. Please refresh.'
+        );
+      }
+
+      const updated = await tx.ticket.findUnique({
+        where: { id: ticket.id },
         include: customerTicketInclude,
       });
 
@@ -406,7 +481,7 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: AuditAction.TICKET_REOPENED,
-          actorId: body.customerId,
+          actorId: authenticatedCustomerId,
           actorName: customer?.name ?? 'Customer',
           actorType: 'customer',
           metadata: {
@@ -436,6 +511,118 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
   } catch (err) {
     if (err instanceof z.ZodError) {
       next(new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Validation failed', { issues: err.issues }));
+    } else {
+      next(err);
+    }
+  }
+});
+
+// ── POST /api/customer/tickets/follow-up ──────────────────────
+const FollowUpSchema = z.object({
+  parentTicketKey: z.string().min(1),
+  subject: z.string().min(3, 'Subject must be at least 3 characters'),
+  description: z.string().min(10, 'Please provide a detailed description of the follow-up issue'),
+  priority: z.nativeEnum(TicketPriority).optional().default(TicketPriority.MEDIUM),
+});
+
+router.post('/tickets/follow-up', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authenticatedCustomerId = req.auth?.customerId;
+    if (!authenticatedCustomerId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Missing customer session.');
+    }
+
+    const body = FollowUpSchema.parse(req.body);
+    const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
+
+    const parent = await prisma.ticket.findUnique({
+      where: { ticketKey: body.parentTicketKey },
+    });
+    if (!parent) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Parent ticket ${body.parentTicketKey} not found`);
+
+    // Verify ownership of the parent ticket
+    if (parent.customerId !== authenticatedCustomerId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Access denied: You do not own the referenced ticket.');
+    }
+
+    const customer = await prisma.customer.findUnique({ where: { id: authenticatedCustomerId } });
+    if (!customer) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Customer profile not found');
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Find highest ticket number
+      const allTickets = await tx.ticket.findMany({
+        select: { ticketKey: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      let maxNum = 100;
+      for (const t of allTickets) {
+        const match = t.ticketKey.match(/^ARV-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+      const newKey = `ARV-${maxNum + 1}`;
+
+      const frTargetMins = SLA_TARGETS[body.priority].firstResponseMinutes;
+      const resTargetMins = calculateInitialResolutionTarget(currentTime, body.priority, holidays);
+
+      const newTicket = await tx.ticket.create({
+        data: {
+          ticketKey: newKey,
+          subject: body.subject,
+          description: body.description,
+          priority: body.priority,
+          status: 'OPEN',
+          customerId: authenticatedCustomerId,
+          linkedFromTicketId: parent.id,
+          slaFirstResponseTarget: frTargetMins,
+          slaResolutionTarget: resTargetMins,
+          slaLastTickAt: currentTime,
+          createdAt: currentTime,
+          updatedAt: currentTime,
+        },
+        include: customerTicketInclude,
+      });
+
+      // Initial message
+      await tx.ticketMessage.create({
+        data: {
+          ticketId: newTicket.id,
+          type: 'CUSTOMER',
+          content: body.description,
+          customerId: authenticatedCustomerId,
+          senderName: customer.name,
+          createdAt: currentTime,
+        },
+      });
+
+      // Audit log entry linking to parent
+      await tx.auditLog.create({
+        data: {
+          ticketId: newTicket.id,
+          ticketKey: newTicket.ticketKey,
+          action: AuditAction.TICKET_CREATED,
+          actorId: authenticatedCustomerId,
+          actorName: customer.name,
+          actorType: 'customer',
+          metadata: {
+            linkedFromTicketKey: parent.ticketKey,
+            reason: 'linked_follow_up_ticket',
+            priority: body.priority,
+          },
+          createdAt: currentTime,
+        },
+      });
+
+      return newTicket;
+    });
+
+    const data = formatCustomerTicket(result, currentTime, holidays, true);
+    res.status(201).json({ success: true, data, timestamp: new Date().toISOString() });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(new AppError(422, ERROR_CODES.VALIDATION_ERROR, err.issues[0]?.message || 'Validation failed', { issues: err.issues }));
     } else {
       next(err);
     }
