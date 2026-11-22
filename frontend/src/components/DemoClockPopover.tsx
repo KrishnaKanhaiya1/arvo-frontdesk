@@ -29,6 +29,7 @@ export const DemoClockPopover: React.FC = () => {
   const [showAddHoliday, setShowAddHoliday] = useState(false);
   const [newHolidayName, setNewHolidayName] = useState('');
   const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [holidayFilter, setHolidayFilter] = useState('');
 
   const popoverRef = useRef<HTMLDivElement>(null);
   const { data: clock, isLoading } = useSystemClock();
@@ -311,11 +312,26 @@ export const DemoClockPopover: React.FC = () => {
               </form>
             )}
 
+            {/* Holiday Search & Filter */}
+            {clock?.holidays && clock.holidays.length > 5 && !showAddHoliday && (
+              <div className="mb-1.5">
+                <input
+                  type="text"
+                  placeholder="Filter holidays by name or date…"
+                  value={holidayFilter}
+                  onChange={e => setHolidayFilter(e.target.value)}
+                  className="w-full px-2 py-0.5 text-[10px] border border-[var(--border)] rounded-md bg-[var(--surface-subtle)] text-[var(--content)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                />
+              </div>
+            )}
+
             {/* Holiday List */}
             {clock?.holidays && clock.holidays.length > 0 ? (
-              <div className="max-h-24 overflow-y-auto space-y-1 pr-1 font-mono text-[10px] text-[var(--muted)] slim-scrollbar">
-                {clock.holidays.map((h, i) => (
-                  <div key={h.id || i} className="flex items-center justify-between py-0.5 border-b border-[var(--border)]/40 last:border-0 group">
+              <div className="max-h-36 overflow-y-auto space-y-1 pr-1 font-mono text-[10px] text-[var(--muted)] slim-scrollbar">
+                {clock.holidays
+                  .filter(h => !holidayFilter.trim() || h.name.toLowerCase().includes(holidayFilter.toLowerCase()) || h.date.includes(holidayFilter))
+                  .map((h, i) => (
+                  <div key={h.id || i} className="flex items-center justify-between py-0.5 border-b border-[var(--border)]/40 last:border-0 group hover:bg-[var(--surface-subtle)]/50 px-1 rounded transition-colors">
                     <span className="font-medium text-[var(--content)] truncate max-w-[170px]" title={h.name}>
                       {h.name}
                     </span>
