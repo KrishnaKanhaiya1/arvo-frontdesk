@@ -148,7 +148,7 @@ export const LoginPage: React.FC = () => {
                     CORE
                   </span>
                 </div>
-                <span className="text-[10px] text-[var(--muted)] font-mono leading-none mt-1">
+                <span className="text-[10px] text-[var(--muted)] font-mono leading-none mt-1 hidden sm:inline">
                   ENTERPRISE SLA OPERATIONS CONSOLE
                 </span>
               </div>
@@ -193,14 +193,14 @@ export const LoginPage: React.FC = () => {
               
               {/* Active Session Reconnect Alert if already logged in */}
               {actorId && (
-                <div className="mb-4 flex items-center justify-between rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/80 dark:bg-blue-950/50 px-3.5 py-2.5 text-xs text-blue-900 dark:text-blue-200">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span>Signed in as <strong>{actorName}</strong> ({role})</span>
+                <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/80 dark:bg-blue-950/50 px-3.5 py-2 text-xs text-blue-900 dark:text-blue-200">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="w-2 h-2 shrink-0 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="truncate">Signed in: <strong>{actorName}</strong> ({role})</span>
                   </div>
                   <Link
                     to={role === 'customer' ? '/customer' : '/tickets/ARV-101'}
-                    className="font-bold underline hover:text-blue-700 dark:hover:text-blue-300 inline-flex items-center gap-1"
+                    className="font-bold underline hover:text-blue-700 dark:hover:text-blue-300 inline-flex items-center gap-1 shrink-0 self-end sm:self-auto"
                   >
                     Enter Console <ArrowRight className="w-3 h-3" />
                   </Link>

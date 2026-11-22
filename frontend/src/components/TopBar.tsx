@@ -32,7 +32,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenEvaluatorGuide }) => {
                 Frontdesk
               </span>
             </div>
-            <span className="text-[10px] text-[var(--muted)] font-mono leading-none mt-1">Enterprise SLA Core</span>
+            <span className="text-[10px] text-[var(--muted)] font-mono leading-none mt-1 hidden sm:inline">Enterprise SLA Core</span>
           </div>
         </div>
 

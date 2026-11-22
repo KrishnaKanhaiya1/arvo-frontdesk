@@ -4,6 +4,22 @@
 
 ---
 
+## 🌐 Live Production Deployments & Verification
+
+* **Frontend Console (Vercel):** [https://arvo-frontdesk.vercel.app](https://arvo-frontdesk.vercel.app/login)
+* **Backend API (Render):** [https://arvo-frontdesk-api.onrender.com](https://arvo-frontdesk-api.onrender.com)
+* **Backend Health Check:** [https://arvo-frontdesk-api.onrender.com/api/health](https://arvo-frontdesk-api.onrender.com/api/health)
+* **Demo Personas Endpoint:** [https://arvo-frontdesk-api.onrender.com/api/auth/demo-personas](https://arvo-frontdesk-api.onrender.com/api/auth/demo-personas)
+* **GitHub Repository:** [https://github.com/KrishnaKanhaiya1/arvo-frontdesk](https://github.com/KrishnaKanhaiya1/arvo-frontdesk)
+
+### 🚀 1-Click Cloud Deployment Architecture
+* **Frontend:** Hosted on Vercel with automatic edge rewrites (`/api/:path*` $\rightarrow$ Render API), ensuring 100% same-origin cookie compliance, eliminating third-party cookie restrictions and cross-site CORS blocks.
+* **Backend & Database:** Configured for Render via declarative Blueprint (`render.yaml`). Provisions a managed PostgreSQL instance, runs `prisma db push`, and auto-seeds all 8 canonical story tickets on first boot.
+* **Deploy to Render Button:**
+  [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://dashboard.render.com/select-repo?type=blueprint)
+
+---
+
 ## 🏆 Executive Summary & Architecture Highlights
 
 Arvo Frontdesk is built to solve the systemic operational failures documented in Arvo’s quarterly reviews and incident post-mortems:

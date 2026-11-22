@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { installAuditImmutabilityTrigger } from '../utils/auditTrigger';
 
 export async function resetToCanonicalSeed(prisma: PrismaClient) {
   // Allow cleanup setting for seed script
@@ -394,5 +395,10 @@ export async function resetToCanonicalSeed(prisma: PrismaClient) {
         createdAt: new Date('2026-11-19T11:00:00+05:30'),
       },
     ],
+  });
+
+  // Reinstall PostgreSQL immutable audit trigger after seed reset
+  await installAuditImmutabilityTrigger(prisma).catch((err) => {
+    console.warn('Could not install PostgreSQL audit immutability trigger during seed:', err);
   });
 }

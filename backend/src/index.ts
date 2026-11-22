@@ -13,8 +13,11 @@ import dashboardRouter from './routes/dashboard';
 import systemRouter from './routes/system';
 import agentsRouter from './routes/agents';
 import { runAutoClose } from './services/autoclose';
+import prisma from './utils/prisma';
+import { resetToCanonicalSeed } from './services/seedService';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
 const allowedOrigins = [
@@ -82,8 +85,30 @@ app.use(requestLogger);
 app.use(authenticate);
 
 // Health check endpoint
-app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ success: true, data: { status: 'ok', uptime: process.uptime() }, status: 'ok', uptime: process.uptime() });
+app.get('/api/health', async (_req: Request, res: Response) => {
+  let dbStatus = 'disconnected';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (e: any) {
+    dbStatus = `error: ${e.message}`;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      status: 'ok',
+      database: dbStatus,
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+    },
+    status: 'ok',
+    database: dbStatus,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+  });
 });
 
 // Mount Routes
@@ -113,8 +138,18 @@ cron.schedule('*/5 * * * *', async () => {
 
 // Start server
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Arvo Frontdesk Backend running on http://localhost:${PORT}`);
+    try {
+      const agentCount = await prisma.agent.count().catch(() => 0);
+      if (agentCount === 0) {
+        console.log('🌱 Empty database detected on startup. Auto-seeding canonical data...');
+        await resetToCanonicalSeed(prisma);
+        console.log('✅ Canonical database seeded successfully.');
+      }
+    } catch (err) {
+      console.warn('Startup database bootstrap check warning:', err);
+    }
   });
 }
 

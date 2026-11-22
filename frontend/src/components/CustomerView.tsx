@@ -145,11 +145,11 @@ export const CustomerView: React.FC = () => {
             <span className="text-sm font-bold text-[var(--content)] font-['Archivo',sans-serif]">
               Arvo Customer Care
             </span>
-            <span className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-semibold font-mono">
+            <span className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-semibold font-mono hidden sm:inline">
               Verified Client Portal
             </span>
           </div>
-          <span className="text-[10px] text-[var(--muted)] font-mono">
+          <span className="text-[10px] text-[var(--muted)] font-mono truncate max-w-[140px] sm:max-w-none">
             {customerName || 'Acme Corp'} · Enterprise Tier SLA
           </span>
         </div>
@@ -157,22 +157,21 @@ export const CustomerView: React.FC = () => {
         <div className="flex-1" />
 
         {/* Right Header Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Privacy Verification Pill */}
           <button
             onClick={() => setShowPrivacyAudit((prev) => !prev)}
-            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
             title="Inspect Data Boundary Isolation"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             <span className="hidden md:inline">Privacy Verification</span>
-            <span className="inline md:hidden">Privacy</span>
           </button>
 
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-subtle)] text-[var(--muted)] transition-colors cursor-pointer"
             title="Toggle theme"
           >
             {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
@@ -184,11 +183,11 @@ export const CustomerView: React.FC = () => {
               await setAgentPersona('agent-meera');
               navigate('/tickets/ARV-101');
             }}
-            className="px-2 sm:px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="p-1.5 sm:px-3 sm:py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Switch to Agent Console"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Agent Workspace</span>
-            <span className="inline sm:hidden">Agent</span>
           </button>
 
           {/* Sign Out / Back to Login */}
@@ -197,7 +196,7 @@ export const CustomerView: React.FC = () => {
               await logout();
               navigate('/login');
             }}
-            className="px-2.5 py-1.5 text-xs font-semibold text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface-subtle)] border border-[var(--border)] rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-semibold text-[var(--muted)] hover:text-[var(--content)] hover:bg-[var(--surface-subtle)] border border-[var(--border)] rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
             title="Sign out and return to Login Gateway"
           >
             <LogOut className="w-3.5 h-3.5" />

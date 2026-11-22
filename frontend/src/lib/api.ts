@@ -1,16 +1,24 @@
 export function getApiUrl(): string {
   if (typeof window !== 'undefined') {
     const envUrl = (import.meta as any).env?.VITE_API_URL;
-    if (envUrl) {
+    if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+      const cleanUrl = envUrl.trim().replace(/\/+$/, '');
       // If envUrl is explicitly pointing to localhost and browser is on 127.0.0.1, align them
-      if (window.location.hostname === '127.0.0.1' && envUrl.includes('localhost')) {
-        return envUrl.replace('localhost', '127.0.0.1');
+      if (window.location.hostname === '127.0.0.1' && cleanUrl.includes('localhost')) {
+        return cleanUrl.replace('localhost', '127.0.0.1');
       }
-      return envUrl;
+      return cleanUrl;
     }
-    // Dynamic fallback matching current hostname (127.0.0.1 vs localhost)
-    const host = window.location.hostname === '127.0.0.1' ? '127.0.0.1' : 'localhost';
-    return `http://${host}:3001`;
+
+    // Dynamic local development fallback (127.0.0.1 vs localhost)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      const host = window.location.hostname === '127.0.0.1' ? '127.0.0.1' : 'localhost';
+      return `http://${host}:3001`;
+    }
+
+    // Public / Production deployment fallback:
+    // Never fall back to localhost in production. Default to the production backend deployment:
+    return 'https://arvo-frontdesk-api.onrender.com';
   }
   return (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
 }
