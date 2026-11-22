@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   ShieldCheck, 
   Lock, 
@@ -46,9 +46,27 @@ const SLIDES = [
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnUrl = (location.state as any)?.from as string | undefined;
   const { loginWithEmail, registerNewCustomer, setAgentPersona, actorId, actorName, role } = usePersona();
   const { theme, toggleTheme } = useTheme();
   const { data: clock } = useSystemClock();
+
+  const redirectAfterAuth = (userRole: string) => {
+    if (userRole === 'customer') {
+      if (returnUrl && returnUrl.startsWith('/customer')) {
+        navigate(returnUrl, { replace: true });
+      } else {
+        navigate('/customer', { replace: true });
+      }
+    } else {
+      if (returnUrl && returnUrl.startsWith('/tickets')) {
+        navigate(returnUrl, { replace: true });
+      } else {
+        navigate('/tickets/ARV-101', { replace: true });
+      }
+    }
+  };
 
   // Mode: 'signin' | 'signup'
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -105,11 +123,7 @@ export const LoginPage: React.FC = () => {
       setIsSubmitting(true);
       setErrorMsg(null);
       const user = await loginWithEmail(email.trim(), password.trim());
-      if (user.role === 'customer') {
-        navigate('/customer');
-      } else {
-        navigate('/tickets/ARV-101');
-      }
+      redirectAfterAuth(user.role);
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication failed. Please verify credentials.');
     } finally {
@@ -141,7 +155,7 @@ export const LoginPage: React.FC = () => {
         email: regEmail.trim(),
         password: regPassword.trim(),
       });
-      navigate('/customer');
+      redirectAfterAuth('customer');
     } catch (err: any) {
       setErrorMsg(err.message || 'Registration failed. Please try again.');
     } finally {
@@ -156,11 +170,7 @@ export const LoginPage: React.FC = () => {
     try {
       setIsSubmitting(true);
       const user = await loginWithEmail(userEmail, 'arvo2026');
-      if (user.role === 'customer') {
-        navigate('/customer');
-      } else {
-        navigate('/tickets/ARV-101');
-      }
+      redirectAfterAuth(user.role);
     } catch (err: any) {
       setErrorMsg(err.message || 'Demo login failed.');
     } finally {

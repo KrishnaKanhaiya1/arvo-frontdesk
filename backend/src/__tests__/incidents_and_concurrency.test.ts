@@ -39,10 +39,13 @@ beforeAll(async () => {
     });
   }
 
-  // 2. Install PostgreSQL audit immutability trigger
+  // 2. Ensure canonical database seed exists
+  await seed(prisma);
+
+  // 3. Install PostgreSQL audit immutability trigger
   await installAuditImmutabilityTrigger(prisma).catch(() => {});
 
-  // 3. Acquire signed session cookies for test personas
+  // 4. Acquire signed session cookies for test personas
   meeraCookie = await fetchSessionCookie('agent-meera');
   rahulCookie = await fetchSessionCookie('agent-rahul');
   priyaCookie = await fetchSessionCookie('agent-priya');

@@ -72,6 +72,7 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
   const [showReplyDropdown, setShowReplyDropdown] = useState(false);
   const [showPriorityDialog, setShowPriorityDialog] = useState(false);
   const [showConflictModal, setShowConflictModal] = useState(false);
+  const [showTakeoverModal, setShowTakeoverModal] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -206,7 +207,8 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
   };
 
   const handleTakeOver = () => {
-    if (!agentId) return;
+    if (!agentId || !ticket) return;
+    setShowTakeoverModal(false);
     claimTicket.mutate(
       { agentId, version: ticket.version, allowTakeover: true },
       {
@@ -311,7 +313,7 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
 
           {isAssignedToOther && !isClosed && (
             <button
-              onClick={handleTakeOver}
+              onClick={() => setShowTakeoverModal(true)}
               disabled={claimTicket.isPending}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-bold rounded-lg transition-all cursor-pointer"
               title={`Currently owned by ${ticket.assigneeName}. Click to reassign to yourself.`}
@@ -459,7 +461,7 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
                     </button>
                   ) : (
                     <button
-                      onClick={handleTakeOver}
+                      onClick={() => setShowTakeoverModal(true)}
                       disabled={claimTicket.isPending}
                       className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm shrink-0 cursor-pointer"
                     >
@@ -556,6 +558,56 @@ export const TicketDetail: React.FC<TicketDetailProps> = ({ ticketKey }) => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {showTakeoverModal && ticket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[var(--content)]">
+                  Confirm Ticket Takeover
+                </h3>
+                <p className="text-xs text-[var(--muted)] font-mono">
+                  {ticket.ticketKey} · {ticket.subject}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm text-[var(--content)] leading-relaxed">
+              This ticket is currently assigned to{' '}
+              <strong className="text-amber-600 dark:text-amber-400">
+                {ticket.assigneeName || 'another specialist'}
+              </strong>
+              . Are you sure you want to take over ownership?
+            </p>
+
+            <div className="p-3 bg-[var(--surface-subtle)] border border-[var(--border)] rounded-xl text-[11px] text-[var(--muted)] space-y-1">
+              <div>• Reassigns ticket ownership to <strong>{agentName || 'you'}</strong>.</div>
+              <div>• Increments CAS version to prevent concurrent collisions.</div>
+              <div>• Appends an immutable audit event to the ticket log.</div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setShowTakeoverModal(false)}
+                className="px-3.5 py-1.5 border border-[var(--border)] rounded-lg text-xs font-semibold hover:bg-[var(--surface-subtle)] text-[var(--content)] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTakeOver}
+                disabled={claimTicket.isPending}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {claimTicket.isPending ? 'Reassigning…' : 'Confirm Takeover'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

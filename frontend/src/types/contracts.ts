@@ -296,6 +296,7 @@ export interface SystemClock {
 }
 
 export interface Holiday {
+  id?: string;
   date: string;                  // YYYY-MM-DD
   name: string;
 }

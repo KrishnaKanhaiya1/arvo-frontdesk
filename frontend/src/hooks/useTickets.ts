@@ -250,8 +250,54 @@ export function useSetClock() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clock'] });
       qc.invalidateQueries({ queryKey: ['tickets'] });
+      qc.invalidateQueries({ queryKey: ['ticket'] });
+      qc.invalidateQueries({ queryKey: ['customer-tickets'] });
+      qc.invalidateQueries({ queryKey: ['customer-ticket'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
-      toast.success('Clock updated');
+      toast.success('Simulation clock updated');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to update clock');
+    },
+  });
+}
+
+export function useAddHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; date: string }) =>
+      apiFetch<any>('/api/system/holidays', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clock'] });
+      qc.invalidateQueries({ queryKey: ['tickets'] });
+      qc.invalidateQueries({ queryKey: ['ticket'] });
+      qc.invalidateQueries({ queryKey: ['customer-tickets'] });
+      qc.invalidateQueries({ queryKey: ['customer-ticket'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('Holiday added to operations calendar');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to add holiday');
+    },
+  });
+}
+
+export function useDeleteHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<any>(`/api/system/holidays/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clock'] });
+      qc.invalidateQueries({ queryKey: ['tickets'] });
+      qc.invalidateQueries({ queryKey: ['ticket'] });
+      qc.invalidateQueries({ queryKey: ['customer-tickets'] });
+      qc.invalidateQueries({ queryKey: ['customer-ticket'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('Holiday removed from calendar');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to remove holiday');
     },
   });
 }

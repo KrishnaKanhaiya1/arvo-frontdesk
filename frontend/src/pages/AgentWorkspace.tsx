@@ -297,7 +297,7 @@ export const AgentWorkspace: React.FC = () => {
           </div>
 
           {/* Ticket Queue List (Desktop always visible, Mobile conditionally) */}
-          <div className={`w-full md:w-[340px] flex-shrink-0 ${mobileTab === 'queue' ? 'flex' : 'hidden md:flex'}`}>
+          <div className={`w-full md:w-[300px] lg:w-[340px] flex-shrink-0 ${mobileTab === 'queue' ? 'flex' : 'hidden md:flex'}`}>
             <TicketList
               tickets={filteredTickets}
               selectedKey={selectedTicketKey}

@@ -41,7 +41,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenEvaluatorGuide }) => {
 
         {/* Business Hours Status Indicator */}
         <div
-          className={`hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${
+          className={`hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${
             isBusinessHours
               ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
               : 'bg-[var(--surface-subtle)] text-[var(--muted)] border-[var(--border)]'
@@ -58,10 +58,13 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenEvaluatorGuide }) => {
               }`}
             ></span>
           </span>
-          <span className="font-medium whitespace-nowrap">
+          <span className="font-medium whitespace-nowrap hidden lg:inline">
             {isBusinessHours ? 'IST Business Hours Active' : 'Off-Hours · Clocks Paused'}
           </span>
-          <span className="text-[10px] text-[var(--muted)] font-mono hidden md:inline whitespace-nowrap">09:30–18:30 IST</span>
+          <span className="font-medium whitespace-nowrap lg:hidden">
+            {isBusinessHours ? '09:30–18:30 IST' : 'Clocks Paused'}
+          </span>
+          <span className="text-[10px] text-[var(--muted)] font-mono hidden xl:inline whitespace-nowrap">09:30–18:30 IST</span>
         </div>
 
         {/* Center space */}
