@@ -5,23 +5,31 @@ import { TicketPriority } from '../types/contracts';
 
 interface NewTicketDialogProps {
   onClose: () => void;
+  defaultCustomerId?: string;
+  onSuccess?: (ticketKey: string) => void;
 }
 
-export const NewTicketDialog: React.FC<NewTicketDialogProps> = ({ onClose }) => {
+export const NewTicketDialog: React.FC<NewTicketDialogProps> = ({ onClose, defaultCustomerId, onSuccess }) => {
   const { data: customers = [] } = useCustomers();
   const createTicket = useCreateTicket();
 
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TicketPriority>(TicketPriority.MEDIUM);
-  const [customerId, setCustomerId] = useState('');
+  const [customerId, setCustomerId] = useState(defaultCustomerId || '');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject.trim() || !description.trim() || !customerId) return;
+    const finalCustomerId = defaultCustomerId || customerId;
+    if (!subject.trim() || !description.trim() || !finalCustomerId) return;
     createTicket.mutate(
-      { subject: subject.trim(), description: description.trim(), priority, customerId },
-      { onSuccess: onClose }
+      { subject: subject.trim(), description: description.trim(), priority, customerId: finalCustomerId },
+      { 
+        onSuccess: (data: any) => {
+          onSuccess?.(data?.ticketKey || data?.ticket?.ticketKey || '');
+          onClose();
+        } 
+      }
     );
   };
 
@@ -67,8 +75,8 @@ export const NewTicketDialog: React.FC<NewTicketDialogProps> = ({ onClose }) => 
             />
           </div>
 
-          {/* Priority + Customer — side by side */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Priority + Customer */}
+          <div className={defaultCustomerId ? 'space-y-3' : 'grid grid-cols-2 gap-3'}>
             <div>
               <label className="block text-xs font-semibold text-[#475569] mb-1.5">Priority</label>
               <select
@@ -82,24 +90,26 @@ export const NewTicketDialog: React.FC<NewTicketDialogProps> = ({ onClose }) => 
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-1.5">
-                Customer <span className="text-[#DC2626]">*</span>
-              </label>
-              <select
-                value={customerId}
-                onChange={e => setCustomerId(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg text-[#0F172A] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
-              >
-                <option value="">Select customer…</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.company})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!defaultCustomerId && (
+              <div>
+                <label className="block text-xs font-semibold text-[#475569] mb-1.5">
+                  Customer <span className="text-[#DC2626]">*</span>
+                </label>
+                <select
+                  value={customerId}
+                  onChange={e => setCustomerId(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg text-[#0F172A] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
+                >
+                  <option value="">Select customer…</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.company})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Actions */}

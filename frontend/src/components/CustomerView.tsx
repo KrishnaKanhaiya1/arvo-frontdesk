@@ -23,11 +23,13 @@ import {
   CheckCircle,
   Database,
   ShieldAlert,
-  Loader2
+  Loader2,
+  Plus
 } from 'lucide-react';
 import { useCustomerTickets, useCustomerTicket, useCustomerReply, useCustomerReopen, useCreateTicket } from '../hooks/useTickets';
 import { usePersona } from '../hooks/usePersona';
 import { useTheme } from '../hooks/useTheme';
+import { NewTicketDialog } from './NewTicketDialog';
 import {
   getStatusColors,
   getStatusLabel,
@@ -44,7 +46,17 @@ import { Avatar } from './Avatar';
 export const CustomerView: React.FC = () => {
   const { ticketKey: urlTicketKey } = useParams<{ ticketKey: string }>();
   const navigate = useNavigate();
-  const { customerId: currentCustomerId, customerName, role, setCustomerPersona, setAgentPersona, logout } = usePersona();
+  const { 
+    customerId: currentCustomerId, 
+    customerName, 
+    customerCompany, 
+    customerInitials, 
+    customerColor, 
+    role, 
+    setCustomerPersona, 
+    setAgentPersona, 
+    logout 
+  } = usePersona();
   const { theme, toggleTheme } = useTheme();
 
   // If currently in an agent role and navigating to customer portal, automatically switch persona
@@ -61,6 +73,7 @@ export const CustomerView: React.FC = () => {
   const [replyText, setReplyText] = useState('');
   const [showPrivacyAudit, setShowPrivacyAudit] = useState(false);
   const [showRawJsonModal, setShowRawJsonModal] = useState(false);
+  const [showNewTicketModal, setShowNewTicketModal] = useState(false);
 
   // Linked Follow-up Ticket Dialog state
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
@@ -152,14 +165,14 @@ export const CustomerView: React.FC = () => {
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-[var(--content)] font-['Archivo',sans-serif]">
-              Arvo Customer Care
+              {customerCompany || 'Arvo Customer Care'}
             </span>
             <span className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-semibold font-mono hidden sm:inline">
               Verified Client Portal
             </span>
           </div>
           <span className="text-[10px] text-[var(--muted)] font-mono truncate max-w-[140px] sm:max-w-none">
-            {customerName || 'Acme Corp'} · Enterprise Tier SLA
+            {customerName || 'Client'} · Enterprise Tier SLA
           </span>
         </div>
 
@@ -167,6 +180,15 @@ export const CustomerView: React.FC = () => {
 
         {/* Right Header Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* New Ticket CTA */}
+          <button
+            onClick={() => setShowNewTicketModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span className="hidden sm:inline">New Ticket</span>
+          </button>
+
           {/* Privacy Verification Pill */}
           <button
             onClick={() => setShowPrivacyAudit((prev) => !prev)}
@@ -198,6 +220,15 @@ export const CustomerView: React.FC = () => {
             <ArrowLeft className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Agent Workspace</span>
           </button>
+
+          {/* Customer Avatar */}
+          <div
+            className="w-8 h-8 rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs"
+            style={{ backgroundColor: customerColor || '#DC2626' }}
+            title={`${customerName} (${customerCompany || 'Client'})`}
+          >
+            {customerInitials || 'CU'}
+          </div>
 
           {/* Sign Out / Back to Login */}
           <button
@@ -309,7 +340,18 @@ export const CustomerView: React.FC = () => {
             {listLoading ? (
               <div className="p-4 text-xs text-[var(--muted)]">Loading your tickets…</div>
             ) : tickets.length === 0 ? (
-              <div className="p-4 text-xs text-[var(--muted)] text-center">No active tickets found</div>
+              <div className="p-6 text-xs text-[var(--muted)] text-center flex flex-col items-center gap-2.5">
+                <Building2 className="w-8 h-8 text-[var(--subtle)] stroke-[1.5]" />
+                <span className="font-semibold text-[var(--content)]">No support requests yet</span>
+                <span className="text-[11px] text-[var(--muted)] leading-relaxed">Submit a ticket to start receiving SLA-tracked enterprise support.</span>
+                <button
+                  type="button"
+                  onClick={() => setShowNewTicketModal(true)}
+                  className="mt-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+                >
+                  Create First Ticket
+                </button>
+              </div>
             ) : (
               tickets.map(t => (
                 <CustomerTicketRow
@@ -329,8 +371,21 @@ export const CustomerView: React.FC = () => {
         }`}>
           {!selectedKey ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-[var(--muted)]">
-              <Building2 className="w-10 h-10 stroke-[1.2] mb-2 text-[var(--subtle)]" />
-              <p className="text-xs font-medium">Select a support ticket from the list to view conversation history and resolution progress.</p>
+              <Building2 className="w-10 h-10 stroke-[1.2] mb-3 text-[var(--subtle)]" />
+              <p className="text-xs font-medium max-w-sm mb-3">
+                {tickets.length === 0 
+                  ? "Welcome to your Customer Portal. Submit your first support request to track real-time SLA countdowns." 
+                  : "Select a support ticket from the list to view conversation history and resolution progress."}
+              </p>
+              {tickets.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowNewTicketModal(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> Create First Support Ticket
+                </button>
+              )}
             </div>
           ) : detailLoading ? (
             <div className="flex-1 flex items-center justify-center text-xs text-[var(--muted)]">
@@ -652,6 +707,17 @@ export const CustomerView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* New Customer Support Ticket Dialog */}
+      {showNewTicketModal && (
+        <NewTicketDialog
+          defaultCustomerId={activeCustomerId}
+          onClose={() => setShowNewTicketModal(false)}
+          onSuccess={(ticketKey) => {
+            if (ticketKey) handleSelectTicket(ticketKey);
+          }}
+        />
       )}
     </div>
   );
