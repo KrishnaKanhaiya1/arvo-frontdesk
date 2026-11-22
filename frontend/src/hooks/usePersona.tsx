@@ -102,17 +102,69 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
             customerColor: isCust ? (u.avatarColor || '#DC2626') : '#DC2626',
           }));
         } else {
-          // No active session cookie on server
-          localStorage.removeItem('arvo_authenticated');
-          setState((s) => ({
-            ...s,
-            isAuthenticated: false,
-            isLoadingSession: false,
-            isSwitchingPersona: false,
-            actorId: '',
-            agentId: null,
-            customerId: null,
-          }));
+          // If a persona ID is saved in localStorage, attempt self-healing session recovery
+          const savedId = localStorage.getItem('arvo_actor_id');
+          const isSavedAuth = localStorage.getItem('arvo_authenticated') === 'true';
+
+          if (isSavedAuth && savedId && (savedId.startsWith('agent-') || savedId.startsWith('cust-'))) {
+            loginDemoPersona(savedId)
+              .then((res) => {
+                if (res?.user) {
+                  const u = res.user;
+                  const isCust = u.role === 'customer';
+                  localStorage.setItem('arvo_authenticated', 'true');
+                  setState((s) => ({
+                    ...s,
+                    isAuthenticated: true,
+                    isLoadingSession: false,
+                    isSwitchingPersona: false,
+                    mode: isCust ? 'customer' : 'agent',
+                    role: u.role,
+                    isLead: u.role === 'lead',
+                    actorId: u.userId,
+                    actorName: u.name,
+                    agentId: isCust ? null : u.userId,
+                    agentName: isCust ? null : u.name,
+                    customerId: isCust ? u.userId : null,
+                    customerName: isCust ? u.name : 'Vikram Patel',
+                  }));
+                } else {
+                  localStorage.removeItem('arvo_authenticated');
+                  setState((s) => ({
+                    ...s,
+                    isAuthenticated: false,
+                    isLoadingSession: false,
+                    isSwitchingPersona: false,
+                    actorId: '',
+                    agentId: null,
+                    customerId: null,
+                  }));
+                }
+              })
+              .catch(() => {
+                localStorage.removeItem('arvo_authenticated');
+                setState((s) => ({
+                  ...s,
+                  isAuthenticated: false,
+                  isLoadingSession: false,
+                  isSwitchingPersona: false,
+                  actorId: '',
+                  agentId: null,
+                  customerId: null,
+                }));
+              });
+          } else {
+            localStorage.removeItem('arvo_authenticated');
+            setState((s) => ({
+              ...s,
+              isAuthenticated: false,
+              isLoadingSession: false,
+              isSwitchingPersona: false,
+              actorId: '',
+              agentId: null,
+              customerId: null,
+            }));
+          }
         }
       })
       .catch(() => {
