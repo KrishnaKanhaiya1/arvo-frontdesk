@@ -125,17 +125,6 @@ async function run() {
     const meeraBtn = document.querySelector('button[title*="Meera Krishnan"]');
     if (meeraBtn) {
       meeraBtn.click();
-    } else {
-      // Fallback: fill email and submit
-      const emailInput = document.querySelector('input[type="email"]');
-      const passInput = document.querySelector('input[type="password"]');
-      if (emailInput && passInput) {
-        emailInput.value = 'meera@arvo.systems';
-        emailInput.dispatchEvent(new Event('input', { bubbles: true }));
-        passInput.value = 'arvo2026';
-        passInput.dispatchEvent(new Event('input', { bubbles: true }));
-        document.querySelector('button[type="submit"]')?.click();
-      }
     }
   `);
   await client.sleep(4000);
@@ -146,17 +135,17 @@ async function run() {
   await client.screenshot('01_deep_link_redirect_and_return.png');
 
   // ─────────────────────────────────────────────────────────────
-  // TEST 2: Takeover Confirmation Modal (MAJ-02)
+  // TEST 2: Takeover Confirmation Modal (MAJ-02) on ARV-106
   // ─────────────────────────────────────────────────────────────
-  console.log('\n--- Test 2: Takeover Confirmation Modal ---');
-  // Navigate to ARV-104 (assigned to Priya)
-  await client.send('Page.navigate', { url: 'https://arvo-frontdesk.vercel.app/tickets/ARV-104' });
-  await client.sleep(3000);
+  console.log('\n--- Test 2: Takeover Confirmation Modal on ARV-106 ---');
+  // ARV-106 is assigned to Rahul Sharma
+  await client.send('Page.navigate', { url: 'https://arvo-frontdesk.vercel.app/tickets/ARV-106' });
+  await client.sleep(3500);
 
   const ticketTitle = await client.eval(`
     document.querySelector('h2')?.innerText || ''
   `);
-  console.log('Ticket loaded on ARV-104:', ticketTitle);
+  console.log('Ticket loaded on ARV-106:', ticketTitle);
 
   // Look for "Take Over Ticket" button
   const hasTakeOverBtn = await client.eval(`
@@ -185,7 +174,7 @@ async function run() {
       const confirmBtn = Array.from(document.querySelectorAll('button')).find(x => x.innerText === 'Confirm Takeover');
       if (confirmBtn) confirmBtn.click();
     `);
-    await client.sleep(3000);
+    await client.sleep(3500);
 
     const currentAssignee = await client.eval(`
       document.body.innerText.includes('Meera Krishnan')
@@ -236,18 +225,18 @@ async function run() {
     `);
     await client.sleep(500);
 
-    // Type name and date
+    // Type name and date with native setter
     await client.eval(`
+      function setReactValue(input, val) {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, val);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
       const nameInput = document.querySelector('input[placeholder*="Holiday Name"]');
       const dateInput = document.querySelector('input[type="date"]');
-      if (nameInput) {
-        nameInput.value = 'National Innovation Day';
-        nameInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      if (dateInput) {
-        dateInput.value = '2026-12-25';
-        dateInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
+      if (nameInput) setReactValue(nameInput, 'National Innovation Festival');
+      if (dateInput) setReactValue(dateInput, '2026-12-25');
     `);
     await client.sleep(500);
 
@@ -259,13 +248,13 @@ async function run() {
     await client.sleep(3000);
 
     const holidayPresent = await client.eval(`
-      document.body.innerText.includes('National Innovation Day')
+      document.body.innerText.includes('National Innovation Festival')
     `);
-    console.log('Newly added holiday is rendered:', holidayPresent);
+    console.log('Newly added holiday is rendered in UI:', holidayPresent);
     results.test4_holiday_added = holidayPresent;
     await client.screenshot('04_holiday_added_interactive.png');
 
-    // Now delete the holiday
+    // Delete the holiday via trash button
     console.log('Deleting holiday via trash button...');
     await client.eval(`
       const trashBtns = Array.from(document.querySelectorAll('button[title*="Remove holiday"]'));
@@ -315,7 +304,7 @@ async function run() {
 
   // Write results JSON
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'test_results.json'), JSON.stringify(results, null, 2));
-  console.log('\n✅ All tests complete! Results:\n', JSON.stringify(results, null, 2));
+  console.log('\n✅ All tests complete! Final Results:\n', JSON.stringify(results, null, 2));
 }
 
 run().catch(err => {

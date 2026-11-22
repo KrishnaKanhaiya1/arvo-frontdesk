@@ -17,7 +17,11 @@ export function getApiUrl(): string {
     }
 
     // Public / Production deployment fallback:
-    // Never fall back to localhost in production. Default to the production backend deployment:
+    // If running on Vercel, use same-origin relative root "" so Vercel's native proxy rewrite
+    // forwards /api/* securely without third-party cross-site cookie restrictions.
+    if (window.location.hostname.endsWith('vercel.app')) {
+      return '';
+    }
     return 'https://arvo-frontdesk-api.onrender.com';
   }
   return (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
