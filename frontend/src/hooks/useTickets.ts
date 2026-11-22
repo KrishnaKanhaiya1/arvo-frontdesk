@@ -138,8 +138,11 @@ export function useCustomerTicket(key: string | null) {
 export function useCreateTicket() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateTicketRequest) =>
-      apiFetch<TicketDetail>('/api/tickets', { method: 'POST', body: JSON.stringify(body) }),
+    mutationFn: (body: CreateTicketRequest) => {
+      const isCustomer = localStorage.getItem('arvo_actor_role') === 'customer';
+      const endpoint = isCustomer ? '/api/customer/tickets' : '/api/tickets';
+      return apiFetch<TicketDetail>(endpoint, { method: 'POST', body: JSON.stringify(body) });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tickets'] });
       qc.invalidateQueries({ queryKey: ['customer-tickets'] });

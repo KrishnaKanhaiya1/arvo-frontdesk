@@ -517,6 +517,101 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
   }
 });
 
+// ── POST /api/customer/tickets ────────────────────────────────
+const CustomerCreateTicketSchema = z.object({
+  subject: z.string().min(1, 'Subject is required').max(200),
+  description: z.string().min(1, 'Description is required'),
+  priority: z.nativeEnum(TicketPriority).optional().default(TicketPriority.MEDIUM),
+  customerId: z.string().optional(),
+});
+
+router.post('/tickets', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authenticatedCustomerId = req.auth?.customerId || req.body?.customerId;
+    if (!authenticatedCustomerId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: Missing customer session.');
+    }
+
+    const body = CustomerCreateTicketSchema.parse(req.body);
+    const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
+
+    const customer = await prisma.customer.findUnique({ where: { id: authenticatedCustomerId } });
+    if (!customer) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Customer organization not found.');
+
+    const targets = SLA_TARGETS[body.priority];
+    const resolutionTarget = calculateInitialResolutionTarget(currentTime, body.priority, holidays);
+
+    const ticket = await prisma.$transaction(async (tx) => {
+      const counter = await tx.ticketCounter.update({
+        where: { id: 'singleton' },
+        data: { counter: { increment: 1 } },
+      });
+      const ticketKey = `ARV-${counter.counter}`;
+
+      const newTicket = await tx.ticket.create({
+        data: {
+          ticketKey,
+          subject: body.subject,
+          description: body.description,
+          priority: body.priority,
+          status: 'OPEN',
+          customerId: authenticatedCustomerId,
+          slaFirstResponseTarget: targets.firstResponseMinutes,
+          slaResolutionTarget: resolutionTarget,
+          slaLastTickAt: currentTime,
+          createdAt: currentTime,
+          updatedAt: currentTime,
+        },
+        include: customerTicketInclude,
+      });
+
+      await tx.ticketMessage.create({
+        data: {
+          ticketId: newTicket.id,
+          type: 'CUSTOMER',
+          content: body.description,
+          customerId: authenticatedCustomerId,
+          senderName: customer.name,
+          createdAt: currentTime,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          ticketId: newTicket.id,
+          ticketKey,
+          action: 'TICKET_CREATED',
+          actorId: authenticatedCustomerId,
+          actorName: customer.name,
+          actorType: 'customer',
+          metadata: {
+            priority: body.priority,
+            subject: body.subject,
+            customerCompany: customer.company,
+          },
+          createdAt: currentTime,
+        },
+      });
+
+      return newTicket;
+    });
+
+    const detail = formatCustomerTicket(ticket, currentTime, holidays, true);
+
+    res.status(201).json({
+      success: true,
+      data: detail,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      next(new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Validation failed', { issues: err.issues }));
+    } else {
+      next(err);
+    }
+  }
+});
+
 // ── POST /api/customer/tickets/follow-up ──────────────────────
 const FollowUpSchema = z.object({
   parentTicketKey: z.string().min(1),

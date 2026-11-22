@@ -23,7 +23,13 @@ import notesRouter from './notes';
 import auditRouter from './audit';
 
 const router = Router();
-router.use(requireAgentRole);
+router.use((req, res, next) => {
+  // Allow ticket creation (POST /) for authenticated customers as well
+  if (req.method === 'POST' && (req.path === '/' || req.path === '')) {
+    if (req.auth) return next();
+  }
+  return requireAgentRole(req, res, next);
+});
 
 // Subroutes for notes and audit
 router.use('/:key/notes', notesRouter);
