@@ -136,7 +136,19 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     const customer = await prisma.customer.findUnique({ where: { email: cleanEmail } });
     if (customer) {
       const isDemoPass = password === DEMO_PASSWORD;
-      const isCustomPass = customer.passwordHash ? verifyPassword(password, customer.passwordHash) : false;
+      let isCustomPass = customer.passwordHash ? verifyPassword(password, customer.passwordHash) : false;
+
+      // Self-healing: if an account registered before the password hash column migration (has null passwordHash and custom UUID id),
+      // allow initial login with their entered password (min 6 chars) and persist the scrypt hash immediately.
+      if (!isDemoPass && !isCustomPass && !customer.passwordHash && !customer.id.startsWith('cust-') && password.length >= 6) {
+        const newHash = hashPassword(password);
+        await prisma.customer.update({
+          where: { id: customer.id },
+          data: { passwordHash: newHash },
+        });
+        isCustomPass = true;
+      }
+
       if (!isDemoPass && !isCustomPass) {
         throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Invalid email or password.');
       }
@@ -276,8 +288,42 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
       prisma.agent.findUnique({ where: { email: cleanEmail } }),
     ]);
 
-    if (existingCustomer || existingAgent) {
-      throw new AppError(409, ERROR_CODES.CONFLICT || 'CONFLICT', 'An account with this email address already exists.');
+    if (existingAgent) {
+      throw new AppError(409, ERROR_CODES.CONFLICT || 'CONFLICT', 'An internal support agent account with this email address already exists.');
+    }
+
+    if (existingCustomer) {
+      // If customer exists but has NO passwordHash or was created prior to hash rollout,
+      // seamlessly update password and log them in!
+      if (!existingCustomer.passwordHash && !existingCustomer.id.startsWith('cust-')) {
+        const updated = await prisma.customer.update({
+          where: { id: existingCustomer.id },
+          data: {
+            name: name.trim(),
+            company: company.trim(),
+            passwordHash: hashPassword(password),
+          },
+        });
+        const user: SessionPayload = {
+          userId: updated.id,
+          role: 'customer',
+          name: updated.name,
+          email: updated.email,
+          avatarColor: updated.avatarColor,
+          avatarInitials: updated.avatarInitials,
+          company: updated.company,
+        };
+        const serialized = JSON.stringify(user);
+        const signed = signCookie(serialized);
+        res.cookie(COOKIE_NAME, signed, getCookieOptions());
+        return res.status(200).json({
+          success: true,
+          user,
+          message: 'Customer account updated and logged in successfully',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      throw new AppError(409, ERROR_CODES.CONFLICT || 'CONFLICT', 'An account with this email address already exists. Please sign in with your password.');
     }
 
     // Generate avatar initials and color

@@ -38,7 +38,11 @@ export function errorHandler(
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message: 'Internal server error',
+      message: err.message || 'Internal server error',
+      details: {
+        errorName: err.name,
+        errorMsg: err.message,
+      },
     },
     timestamp: new Date().toISOString(),
   };
