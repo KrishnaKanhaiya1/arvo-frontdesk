@@ -182,9 +182,9 @@ export const LoginPage: React.FC = () => {
     try {
       setIsSubmitting(true);
       await setAgentPersona('agent-meera');
-      navigate('/tickets/ARV-101');
+      redirectAfterAuth('lead');
     } catch {
-      navigate('/tickets/ARV-101');
+      redirectAfterAuth('lead');
     } finally {
       setIsSubmitting(false);
     }

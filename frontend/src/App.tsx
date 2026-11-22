@@ -10,7 +10,11 @@ import { ThemeProvider } from './hooks/useTheme';
 import { usePersona } from './hooks/usePersona';
 
 const RootRedirect: React.FC = () => {
-  const { isAuthenticated, role } = usePersona();
+  const { isAuthenticated, isLoadingSession, role } = usePersona();
+
+  if (isLoadingSession) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -24,8 +28,12 @@ const RootRedirect: React.FC = () => {
 };
 
 const ProtectedAgentRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, role } = usePersona();
+  const { isAuthenticated, isLoadingSession, role } = usePersona();
   const location = useLocation();
+
+  if (isLoadingSession) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
@@ -39,8 +47,12 @@ const ProtectedAgentRoute: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 const ProtectedCustomerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = usePersona();
+  const { isAuthenticated, isLoadingSession } = usePersona();
   const location = useLocation();
+
+  if (isLoadingSession) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
