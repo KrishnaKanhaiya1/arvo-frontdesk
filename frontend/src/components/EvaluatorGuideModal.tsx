@@ -165,7 +165,7 @@ export const EvaluatorGuideModal: React.FC<EvaluatorGuideProps> = ({
             className="hover:text-blue-600 dark:hover:text-blue-400 font-semibold inline-flex items-center gap-1 underline underline-offset-2 transition-colors"
             title="Inspect Vitest automated test suite on GitHub"
           >
-            <span>All 40 automated tests passing (23 SLA + 17 Incidents)</span>
+            <span>All 43 automated tests passing (26 SLA + 17 Incidents)</span>
             <ExternalLink className="w-3 h-3" />
           </a>
           <button
