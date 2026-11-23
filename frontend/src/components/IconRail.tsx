@@ -6,7 +6,6 @@ import {
   AlertCircle, 
   Clock, 
   CheckCircle2, 
-  ShieldCheck, 
   Keyboard, 
   Sun, 
   Moon, 
@@ -21,7 +20,6 @@ import { useNavigate } from 'react-router-dom';
 interface IconRailProps {
   activeQueue: string;
   onSelectQueue: (queue: string) => void;
-  onOpenEvaluatorGuide: () => void;
   onOpenShortcuts: () => void;
   onOpenCommandPalette: () => void;
   onOpenResetModal: () => void;
@@ -30,7 +28,6 @@ interface IconRailProps {
 export const IconRail: React.FC<IconRailProps> = ({
   activeQueue,
   onSelectQueue,
-  onOpenEvaluatorGuide,
   onOpenShortcuts,
   onOpenCommandPalette,
   onOpenResetModal,
@@ -94,18 +91,6 @@ export const IconRail: React.FC<IconRailProps> = ({
           <Command className="w-4 h-4" />
           <span className="absolute left-14 px-2 py-1 bg-slate-900 text-white text-[11px] rounded shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
             Command Palette (⌘K)
-          </span>
-        </button>
-
-        {/* Evaluator Guide */}
-        <button
-          onClick={onOpenEvaluatorGuide}
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all relative group"
-          title="60-Second Evaluator Verification"
-        >
-          <ShieldCheck className="w-4 h-4" />
-          <span className="absolute left-14 px-2 py-1 bg-slate-900 text-white text-[11px] rounded shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-            Evaluator Verification Guide
           </span>
         </button>
 

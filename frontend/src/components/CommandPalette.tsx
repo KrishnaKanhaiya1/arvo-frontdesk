@@ -8,7 +8,6 @@ import {
   Sun, 
   Moon, 
   User, 
-  ShieldCheck, 
   HelpCircle, 
   FileText,
   X
@@ -22,7 +21,6 @@ import { TicketPriority } from '../types/contracts';
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenEvaluatorGuide: () => void;
   onOpenClock: () => void;
   onOpenReset: () => void;
 }
@@ -30,7 +28,6 @@ interface CommandPaletteProps {
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
-  onOpenEvaluatorGuide,
   onOpenClock,
   onOpenReset,
 }) => {
@@ -75,16 +72,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     .slice(0, 5);
 
   const actionItems = [
-    {
-      id: 'evaluator-guide',
-      label: 'Open 60-Second Evaluator Verification Guide',
-      category: 'Evaluator Tools',
-      icon: <ShieldCheck className="w-4 h-4 text-emerald-500" />,
-      run: () => {
-        onClose();
-        onOpenEvaluatorGuide();
-      },
-    },
     ...(isLead ? [
       {
         id: 'demo-clock',

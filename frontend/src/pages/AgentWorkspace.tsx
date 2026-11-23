@@ -10,7 +10,6 @@ import { TicketList } from '../components/TicketList';
 import { TicketDetail } from '../components/TicketDetail';
 import { InspectorPanel } from '../components/InspectorPanel';
 import { CommandPalette } from '../components/CommandPalette';
-import { EvaluatorGuideModal } from '../components/EvaluatorGuideModal';
 import { ResetConfirmModal } from '../components/ResetConfirmModal';
 import { DemoClockPopover } from '../components/DemoClockPopover';
 import { KeyboardShortcutsLegend } from '../components/KeyboardShortcutsLegend';
@@ -83,7 +82,6 @@ export const AgentWorkspace: React.FC = () => {
   
   // Modals & Panels State
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [showEvaluatorGuide, setShowEvaluatorGuide] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showClock, setShowClock] = useState(false);
@@ -217,7 +215,6 @@ export const AgentWorkspace: React.FC = () => {
         <IconRail
           activeQueue={activeQueue}
           onSelectQueue={(q) => handleQueueFilter(q as QueueFilter)}
-          onOpenEvaluatorGuide={() => setShowEvaluatorGuide(true)}
           onOpenShortcuts={() => setShowShortcuts(true)}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
           onOpenResetModal={() => setShowResetModal(true)}
@@ -227,7 +224,7 @@ export const AgentWorkspace: React.FC = () => {
       {/* ── Main Workspace Body (TopBar + Content) ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* TopBar */}
-        <TopBar onOpenEvaluatorGuide={() => setShowEvaluatorGuide(true)} />
+        <TopBar />
 
         {/* Simulation Clock Override Banner */}
         {clock?.isSimulated && (
@@ -323,14 +320,6 @@ export const AgentWorkspace: React.FC = () => {
       <CommandPalette
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
-        onOpenEvaluatorGuide={() => setShowEvaluatorGuide(true)}
-        onOpenClock={() => setShowClock(true)}
-        onOpenReset={() => setShowResetModal(true)}
-      />
-
-      <EvaluatorGuideModal
-        isOpen={showEvaluatorGuide}
-        onClose={() => setShowEvaluatorGuide(false)}
         onOpenClock={() => setShowClock(true)}
         onOpenReset={() => setShowResetModal(true)}
       />

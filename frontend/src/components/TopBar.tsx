@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
-import { Plus, ShieldCheck, Sun, Moon, HelpCircle } from 'lucide-react';
+import { Plus, Sun, Moon } from 'lucide-react';
 import { useSystemClock } from '../hooks/useTickets';
 import { DemoClockPopover } from './DemoClockPopover';
 import { PersonaSwitcher } from './PersonaSwitcher';
 import { NewTicketDialog } from './NewTicketDialog';
 import { useTheme } from '../hooks/useTheme';
 
-interface TopBarProps {
-  onOpenEvaluatorGuide?: () => void;
-}
-
-export const TopBar: React.FC<TopBarProps> = ({ onOpenEvaluatorGuide }) => {
+export const TopBar: React.FC = () => {
   const { data: clock } = useSystemClock();
   const { theme, toggleTheme } = useTheme();
   const [showNewTicket, setShowNewTicket] = useState(false);
@@ -69,17 +65,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenEvaluatorGuide }) => {
 
         {/* Center space */}
         <div className="flex-1 min-w-[8px]" />
-
-        {/* Evaluator Guide Quick Button */}
-        {onOpenEvaluatorGuide && (
-          <button
-            onClick={onOpenEvaluatorGuide}
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-colors whitespace-nowrap flex-shrink-0"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span>Evaluator Guide</span>
-          </button>
-        )}
 
         {/* Simulation Clock Controls + New Ticket CTA */}
         <div className="flex items-center gap-2 flex-shrink-0">
