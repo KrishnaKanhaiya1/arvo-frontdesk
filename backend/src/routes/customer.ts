@@ -448,6 +448,10 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
       const newStatus = ticket.assigneeId ? 'ASSIGNED' : 'OPEN';
 
       const targetVersion = body.version ?? ticket.version;
+      const pausedMins = ticket.isPaused && ticket.waitingOnCustomerSince
+        ? calculateBusinessMinutesBetween(ticket.waitingOnCustomerSince, currentTime, holidays)
+        : 0;
+
       const updateRes = await tx.ticket.updateMany({
         where: {
           id: ticket.id,
@@ -457,6 +461,9 @@ router.post('/tickets/:key/reopen', async (req: Request, res: Response, next: Ne
         data: {
           status: newStatus,
           resolvedAt: null,
+          isPaused: false,
+          waitingOnCustomerSince: null,
+          totalPausedMinutes: ticket.totalPausedMinutes + pausedMins,
           slaResolutionMet: false,
           slaResolutionMetAt: null,
           slaLastTickAt: currentTime,

@@ -749,15 +749,17 @@ router.patch('/:key/status', async (req: Request, res: Response, next: NextFunct
         updateData.isPaused = true;
         updateData.pausedAt = currentTime;
         updateData.waitingOnCustomerSince = currentTime;
-      } else if (body.newStatus === 'ASSIGNED' && ticket.isPaused) {
-        // Resume from pause
+      } else if (ticket.isPaused) {
+        // Any transition away from WAITING_ON_CUSTOMER unpauses the ticket
         const pausedMins = ticket.waitingOnCustomerSince
           ? calculateBusinessMinutesBetween(ticket.waitingOnCustomerSince, currentTime, holidays)
           : 0;
         updateData.isPaused = false;
         updateData.totalPausedMinutes = ticket.totalPausedMinutes + pausedMins;
         updateData.waitingOnCustomerSince = null;
-      } else if (body.newStatus === 'RESOLVED') {
+      }
+
+      if (body.newStatus === 'RESOLVED') {
         const resElapsed = ticket.slaResolutionElapsed + liveElapsed;
         updateData.resolvedAt = currentTime;
         updateData.slaResolutionMet = true;
