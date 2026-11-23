@@ -1,6 +1,33 @@
 import crypto from 'crypto';
 
-const COOKIE_SECRET = process.env.COOKIE_SECRET || 'arvo-frontdesk-secure-secret-key-prod-2026';
+const KNOWN_INSECURE_SECRETS = new Set([
+  'arvo-frontdesk-secure-secret-key-prod-2026',
+  'arvo_dev_session_secret_min_32_characters_random_key_2026',
+  'CHANGE_ME_TO_A_CRYPTOGRAPHICALLY_SECURE_RANDOM_STRING_AT_LEAST_32_CHARS',
+  'arvo-dev-secret-key-32-characters-minimum-for-session-testing-ok',
+]);
+
+export function resolveSessionSecret(): string {
+  const secret = process.env.SESSION_SECRET || process.env.COOKIE_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction) {
+    if (!secret || secret.trim().length < 32 || KNOWN_INSECURE_SECRETS.has(secret.trim())) {
+      throw new Error(
+        'FATAL: A cryptographically strong SESSION_SECRET (minimum 32 characters) must be configured in production environment variables. Startup aborted.'
+      );
+    }
+    return secret.trim();
+  }
+
+  // Development and test environments
+  if (secret && secret.trim().length >= 32 && !KNOWN_INSECURE_SECRETS.has(secret.trim())) {
+    return secret.trim();
+  }
+  return 'arvo-dev-secret-key-32-characters-minimum-for-session-testing-ok';
+}
+
+const COOKIE_SECRET = resolveSessionSecret();
 export const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'arvo2026';
 
 /**

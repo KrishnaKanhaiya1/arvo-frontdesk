@@ -257,7 +257,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
 // ── POST /api/tickets/:key/claim ──────────────────────────────
 const ClaimSchema = z.object({
-  agentId: z.string().min(1),
+  agentId: z.string().optional(),
   version: z.number().int(),
   allowTakeover: z.boolean().optional(),
 });
@@ -268,27 +268,49 @@ router.post('/:key/claim', async (req: Request, res: Response, next: NextFunctio
     const body = ClaimSchema.parse(req.body);
     const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
 
+    if (!req.auth || !req.auth.actorId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: missing session.');
+    }
+    const actorId = req.auth.actorId;
+    const actorRole = req.auth.actorRole;
+
+    if (actorRole === 'agent' && body.agentId && body.agentId !== actorId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Actor identity mismatch: ordinary agents can only claim tickets for themselves.');
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({
         where: { ticketKey: key },
       });
       if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
 
+      if (ticket.status === 'CLOSED') {
+        throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Cannot claim a closed ticket.');
+      }
+
       // Version check (pre-check)
       if (ticket.version !== body.version) {
         throw new AppError(409, ERROR_CODES.VERSION_MISMATCH, 'Ticket was modified by another agent. Please refresh.');
       }
 
-      const effectiveAgentId = req.auth?.actorId || body.agentId;
+      // Target assignee: if lead assigns to an agent, use that agent; otherwise actor
+      const targetAssigneeId = (actorRole === 'lead' && body.agentId) ? body.agentId : actorId;
+      const targetAgent = await tx.agent.findUnique({ where: { id: targetAssigneeId } });
+      if (!targetAgent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Target agent not found');
 
-      // Check ownership
-      const isTakeover = !!(ticket.assigneeId && ticket.assigneeId !== effectiveAgentId);
-      if (isTakeover && !body.allowTakeover) {
-        throw new AppError(409, ERROR_CODES.CONFLICT, 'Ticket has already been claimed by another agent.');
+      const actingAgent = await tx.agent.findUnique({ where: { id: actorId } });
+      if (!actingAgent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Acting agent not found');
+
+      // Check takeover
+      const isTakeover = !!(ticket.assigneeId && ticket.assigneeId !== targetAssigneeId);
+      if (isTakeover) {
+        if (actorRole !== 'lead') {
+          throw new AppError(409, ERROR_CODES.CONFLICT, 'Ticket has already been claimed by another agent.');
+        }
+        if (!body.allowTakeover) {
+          throw new AppError(409, ERROR_CODES.CONFLICT, 'Ticket has already been claimed by another agent.');
+        }
       }
-
-      const agent = await tx.agent.findUnique({ where: { id: effectiveAgentId } });
-      if (!agent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Agent not found');
 
       // ATOMIC COMPARE-AND-SWAP CONDITIONAL UPDATE:
       // Prevents INC-0291 race condition at database level
@@ -301,14 +323,14 @@ router.post('/:key/claim', async (req: Request, res: Response, next: NextFunctio
         // Must be unassigned or already assigned to same agent
         condition.OR = [
           { assigneeId: null },
-          { assigneeId: body.agentId },
+          { assigneeId: targetAssigneeId },
         ];
       }
 
       const updateResult = await tx.ticket.updateMany({
         where: condition,
         data: {
-          assigneeId: body.agentId,
+          assigneeId: targetAssigneeId,
           status: 'ASSIGNED',
           version: { increment: 1 },
         },
@@ -333,10 +355,12 @@ router.post('/:key/claim', async (req: Request, res: Response, next: NextFunctio
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: auditAction,
-          actorId: body.agentId,
-          actorName: agent.name,
+          actorId: actorId, // STRICT AUTHENTICATED ACTOR
+          actorName: actingAgent.name,
           actorType: 'agent',
-          metadata: isTakeover ? { previousAssigneeId: ticket.assigneeId } : {},
+          metadata: isTakeover
+            ? { previousAssigneeId: ticket.assigneeId, assignedTo: targetAssigneeId }
+            : (targetAssigneeId !== actorId ? { assignedTo: targetAssigneeId } : {}),
           createdAt: currentTime,
         },
       });
@@ -346,8 +370,10 @@ router.post('/:key/claim', async (req: Request, res: Response, next: NextFunctio
           ticketId: ticket.id,
           type: 'SYSTEM',
           content: isTakeover
-            ? `Ticket ownership transferred to ${agent.name}`
-            : `Ticket claimed by ${agent.name}`,
+            ? `Ticket ownership transferred to ${targetAgent.name} by ${actingAgent.name}`
+            : (targetAssigneeId !== actorId
+                ? `Ticket assigned to ${targetAgent.name} by ${actingAgent.name}`
+                : `Ticket claimed by ${actingAgent.name}`),
           senderName: 'System',
           createdAt: currentTime,
         },
@@ -369,7 +395,7 @@ router.post('/:key/claim', async (req: Request, res: Response, next: NextFunctio
 
 // ── POST /api/tickets/:key/reply ──────────────────────────────
 const ReplySchema = z.object({
-  agentId: z.string().min(1),
+  agentId: z.string().optional(),
   content: z.string().min(1),
   newStatus: z.enum(['WAITING_ON_CUSTOMER', 'RESOLVED']).optional(),
   version: z.number().int(),
@@ -381,6 +407,16 @@ router.post('/:key/reply', async (req: Request, res: Response, next: NextFunctio
     const body = ReplySchema.parse(req.body);
     const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
 
+    if (!req.auth || !req.auth.actorId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: missing session.');
+    }
+    const actorId = req.auth.actorId;
+    const actorRole = req.auth.actorRole;
+
+    if (body.agentId && body.agentId !== actorId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Actor identity mismatch: client-supplied agentId does not match authenticated session.');
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({
         where: { ticketKey: key },
@@ -389,11 +425,14 @@ router.post('/:key/reply', async (req: Request, res: Response, next: NextFunctio
       if (ticket.version !== body.version) {
         throw new AppError(409, ERROR_CODES.VERSION_MISMATCH, 'Ticket was modified. Please refresh.');
       }
-      if (ticket.assigneeId !== body.agentId) {
-        throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Only the assigned agent can reply.');
+      if (ticket.status === 'CLOSED') {
+        throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Cannot reply to a closed ticket.');
+      }
+      if (ticket.assigneeId !== actorId && actorRole !== 'lead') {
+        throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Only the assigned agent or team lead can reply.');
       }
 
-      const agent = await tx.agent.findUnique({ where: { id: body.agentId } });
+      const agent = await tx.agent.findUnique({ where: { id: actorId } });
       if (!agent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Agent not found');
 
       // Calculate elapsed since last tick
@@ -423,7 +462,7 @@ router.post('/:key/reply', async (req: Request, res: Response, next: NextFunctio
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: AuditAction.FIRST_RESPONSE_SENT,
-          actorId: body.agentId,
+          actorId: actorId,
           actorName: agent.name,
           actorType: 'agent',
           metadata: {
@@ -497,7 +536,7 @@ router.post('/:key/reply', async (req: Request, res: Response, next: NextFunctio
           ticketId: ticket.id,
           type: 'AGENT_PUBLIC',
           content: body.content,
-          agentId: body.agentId,
+          agentId: actorId,
           senderName: agent.name,
           createdAt: currentTime,
         },
@@ -532,7 +571,7 @@ router.post('/:key/reply', async (req: Request, res: Response, next: NextFunctio
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: auditAction,
-          actorId: body.agentId,
+          actorId: actorId,
           actorName: agent.name,
           actorType: 'agent',
           metadata: { contentLength: body.content.length },
@@ -561,7 +600,7 @@ router.post('/:key/reply', async (req: Request, res: Response, next: NextFunctio
 
 // ── PATCH /api/tickets/:key/priority ─────────────────────────
 const PrioritySchema = z.object({
-  agentId: z.string().min(1),
+  agentId: z.string().optional(),
   newPriority: z.nativeEnum(TicketPriority),
   version: z.number().int(),
 });
@@ -572,14 +611,30 @@ router.patch('/:key/priority', async (req: Request, res: Response, next: NextFun
     const body = PrioritySchema.parse(req.body);
     const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
 
+    if (!req.auth || !req.auth.actorId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: missing session.');
+    }
+    const actorId = req.auth.actorId;
+    const actorRole = req.auth.actorRole;
+
+    if (body.agentId && body.agentId !== actorId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Actor identity mismatch: client-supplied agentId does not match authenticated session.');
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({ where: { ticketKey: key } });
       if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
       if (ticket.version !== body.version) {
         throw new AppError(409, ERROR_CODES.VERSION_MISMATCH, 'Ticket was modified. Please refresh.');
       }
+      if (ticket.status === 'CLOSED') {
+        throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Cannot change priority of a closed ticket.');
+      }
+      if (ticket.assigneeId && ticket.assigneeId !== actorId && actorRole !== 'lead') {
+        throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Only the assigned agent or team lead can change ticket priority.');
+      }
 
-      const agent = await tx.agent.findUnique({ where: { id: body.agentId } });
+      const agent = await tx.agent.findUnique({ where: { id: actorId } });
       if (!agent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Agent not found');
 
       // Calculate current elapsed
@@ -653,7 +708,7 @@ router.patch('/:key/priority', async (req: Request, res: Response, next: NextFun
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: AuditAction.PRIORITY_CHANGED,
-          actorId: body.agentId,
+          actorId: actorId,
           actorName: agent.name,
           actorType: 'agent',
           metadata: {
@@ -674,7 +729,7 @@ router.patch('/:key/priority', async (req: Request, res: Response, next: NextFun
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: AuditAction.SLA_RECALCULATED,
-          actorId: body.agentId,
+          actorId: actorId,
           actorName: agent.name,
           actorType: 'agent',
           metadata: {
@@ -712,7 +767,7 @@ router.patch('/:key/priority', async (req: Request, res: Response, next: NextFun
 
 // ── PATCH /api/tickets/:key/status ───────────────────────────
 const StatusSchema = z.object({
-  agentId: z.string().min(1),
+  agentId: z.string().optional(),
   newStatus: z.enum(['OPEN', 'ASSIGNED', 'WAITING_ON_CUSTOMER', 'RESOLVED', 'CLOSED']),
   version: z.number().int(),
 });
@@ -723,6 +778,16 @@ router.patch('/:key/status', async (req: Request, res: Response, next: NextFunct
     const body = StatusSchema.parse(req.body);
     const [currentTime, holidays] = await Promise.all([getCurrentTime(), loadHolidays()]);
 
+    if (!req.auth || !req.auth.actorId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: missing session.');
+    }
+    const actorId = req.auth.actorId;
+    const actorRole = req.auth.actorRole;
+
+    if (body.agentId && body.agentId !== actorId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Actor identity mismatch: client-supplied agentId does not match authenticated session.');
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({ where: { ticketKey: key } });
       if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
@@ -730,7 +795,38 @@ router.patch('/:key/status', async (req: Request, res: Response, next: NextFunct
         throw new AppError(409, ERROR_CODES.VERSION_MISMATCH, 'Ticket was modified. Please refresh.');
       }
 
-      const agent = await tx.agent.findUnique({ where: { id: body.agentId } });
+      if (ticket.status === 'CLOSED') {
+        throw new AppError(422, ERROR_CODES.VALIDATION_ERROR, 'Closed tickets are terminal and cannot change status. A new linked ticket must be created.');
+      }
+
+      if (ticket.status === body.newStatus) {
+        return ticket;
+      }
+
+      // Check role permissions: ordinary agents cannot change status on tickets not assigned to them
+      if (actorRole === 'agent' && (!ticket.assigneeId || ticket.assigneeId !== actorId)) {
+        throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Only the assigned agent or team lead can change ticket status.');
+      }
+
+      // State Machine Transition Rules
+      const allowedTransitions: Record<string, string[]> = {
+        OPEN: ['ASSIGNED'], // Unassigned tickets must be claimed first
+        ASSIGNED: ['WAITING_ON_CUSTOMER', 'RESOLVED', 'OPEN'],
+        WAITING_ON_CUSTOMER: ['ASSIGNED', 'RESOLVED', 'CLOSED'],
+        RESOLVED: ['ASSIGNED', 'CLOSED'],
+        CLOSED: [],
+      };
+
+      const validNext = allowedTransitions[ticket.status] || [];
+      if (!validNext.includes(body.newStatus)) {
+        throw new AppError(
+          422,
+          ERROR_CODES.VALIDATION_ERROR,
+          `Invalid status transition from ${ticket.status} to ${body.newStatus}. Allowed transitions: ${validNext.join(', ') || 'none'}.`
+        );
+      }
+
+      const agent = await tx.agent.findUnique({ where: { id: actorId } });
       if (!agent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Agent not found');
 
       const liveElapsed = ticket.isPaused
@@ -793,7 +889,7 @@ router.patch('/:key/status', async (req: Request, res: Response, next: NextFunct
           ticketId: ticket.id,
           ticketKey: ticket.ticketKey,
           action: AuditAction.STATUS_CHANGED,
-          actorId: body.agentId,
+          actorId: actorId,
           actorName: agent.name,
           actorType: 'agent',
           metadata: { from: ticket.status, to: body.newStatus },

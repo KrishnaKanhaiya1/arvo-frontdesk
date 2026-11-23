@@ -3,6 +3,7 @@ import prisma from '../utils/prisma';
 import app from '../index';
 import { installAuditImmutabilityTrigger } from '../../prisma/auditTrigger';
 import { seed } from '../../prisma/seed';
+import { resolveSessionSecret } from '../utils/security';
 import { Server } from 'http';
 
 const BASE_URL = 'http://localhost:3001';
@@ -435,5 +436,217 @@ describe('Ticket Lifecycle: Atomic CAS Reopening & Closed Ticket Protection', ()
     const body = await res.json();
     expect(body.success).toBe(false);
     expect(body.error.message).toMatch(/closed/i);
+  });
+
+  describe('Security Remediations: Agent Identity Spoofing, Session Secrets, and Lifecycle State Machine', () => {
+    it('strictly rejects agent identity spoofing in replies with HTTP 403 Forbidden', async () => {
+      // ARV-102 is assigned to Priya
+      const ticket = await prisma.ticket.findUnique({ where: { ticketKey: 'ARV-102' } });
+      expect(ticket).toBeDefined();
+
+      // Rahul attempts to reply specifying agentId = 'agent-priya'
+      const res = await fetch(`${BASE_URL}/api/tickets/ARV-102/reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: rahulCookie,
+        },
+        body: JSON.stringify({
+          agentId: 'agent-priya',
+          content: 'Impersonated reply by Rahul pretending to be Priya',
+          version: ticket!.version,
+        }),
+      });
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.message).toMatch(/mismatch/i);
+    });
+
+    it('strictly rejects agent identity spoofing in priority change with HTTP 403 Forbidden', async () => {
+      const ticket = await prisma.ticket.findUnique({ where: { ticketKey: 'ARV-101' } });
+      const res = await fetch(`${BASE_URL}/api/tickets/ARV-101/priority`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: rahulCookie,
+        },
+        body: JSON.stringify({
+          agentId: 'agent-priya',
+          newPriority: 'CRITICAL',
+          version: ticket!.version,
+        }),
+      });
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.message).toMatch(/mismatch/i);
+    });
+
+    it('strictly rejects agent identity spoofing in status change with HTTP 403 Forbidden', async () => {
+      const ticket = await prisma.ticket.findUnique({ where: { ticketKey: 'ARV-101' } });
+      const res = await fetch(`${BASE_URL}/api/tickets/ARV-101/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: rahulCookie,
+        },
+        body: JSON.stringify({
+          agentId: 'agent-priya',
+          newStatus: 'WAITING_ON_CUSTOMER',
+          version: ticket!.version,
+        }),
+      });
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.message).toMatch(/mismatch/i);
+    });
+
+    it('strictly rejects agent identity spoofing in internal notes with HTTP 403 Forbidden', async () => {
+      const res = await fetch(`${BASE_URL}/api/tickets/ARV-101/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: rahulCookie,
+        },
+        body: JSON.stringify({
+          agentId: 'agent-priya',
+          content: 'Impersonated note by Rahul',
+        }),
+      });
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.message).toMatch(/mismatch/i);
+    });
+
+    it('state machine: strictly rejects invalid transition from OPEN directly to CLOSED with HTTP 422', async () => {
+      // Create fresh OPEN unassigned ticket
+      const openTicket = await prisma.ticket.create({
+        data: {
+          ticketKey: `STAT-${Date.now()}`,
+          subject: 'State Machine Open Jump Test',
+          priority: 'MEDIUM',
+          status: 'OPEN',
+          customerId: 'cust-acme',
+          slaFirstResponseTarget: 240,
+          slaResolutionTarget: 1080,
+          slaLastTickAt: new Date(),
+          version: 1,
+        },
+      });
+
+      // Lead attempts jumping directly from OPEN to CLOSED
+      const res = await fetch(`${BASE_URL}/api/tickets/${openTicket.ticketKey}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: meeraCookie,
+        },
+        body: JSON.stringify({
+          agentId: 'agent-meera',
+          newStatus: 'CLOSED',
+          version: 1,
+        }),
+      });
+
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.message).toMatch(/Invalid status transition/i);
+    });
+
+    it('state machine: ordinary agent cannot alter status of another agent ticket (HTTP 403)', async () => {
+      // ARV-102 is assigned to Priya; Rahul attempts to change its status
+      const ticket = await prisma.ticket.findUnique({ where: { ticketKey: 'ARV-102' } });
+      const res = await fetch(`${BASE_URL}/api/tickets/ARV-102/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: rahulCookie,
+        },
+        body: JSON.stringify({
+          agentId: 'agent-rahul',
+          newStatus: 'RESOLVED',
+          version: ticket!.version,
+        }),
+      });
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.message).toMatch(/Only the assigned agent or team lead/i);
+    });
+
+    it('state machine: terminal CLOSED tickets strictly reject any status changes (HTTP 422)', async () => {
+      const closedTicket = await prisma.ticket.create({
+        data: {
+          ticketKey: `TERM-${Date.now()}`,
+          subject: 'Terminal Closed Ticket Test',
+          priority: 'LOW',
+          status: 'CLOSED',
+          customerId: 'cust-acme',
+          slaFirstResponseTarget: 540,
+          slaResolutionTarget: 2700,
+          slaLastTickAt: new Date(),
+          closedAt: new Date(),
+          version: 1,
+        },
+      });
+
+      const res = await fetch(`${BASE_URL}/api/tickets/${closedTicket.ticketKey}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: meeraCookie,
+        },
+        body: JSON.stringify({
+          agentId: 'agent-meera',
+          newStatus: 'ASSIGNED',
+          version: 1,
+        }),
+      });
+
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.message).toMatch(/terminal/i);
+    });
+
+    it('session secret enforcement: resolveSessionSecret fails on missing or insecure secret in production', () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalSession = process.env.SESSION_SECRET;
+      const originalCookie = process.env.COOKIE_SECRET;
+
+      try {
+        process.env.NODE_ENV = 'production';
+        delete process.env.SESSION_SECRET;
+        delete process.env.COOKIE_SECRET;
+
+        // Missing secret in production must throw fatal error
+        expect(() => resolveSessionSecret()).toThrow(/FATAL: A cryptographically strong SESSION_SECRET/);
+
+        // Weak/short secret must throw fatal error
+        process.env.SESSION_SECRET = 'short-secret';
+        expect(() => resolveSessionSecret()).toThrow(/minimum 32 characters/);
+
+        // Known default insecure secret must throw fatal error
+        process.env.SESSION_SECRET = 'arvo-frontdesk-secure-secret-key-prod-2026';
+        expect(() => resolveSessionSecret()).toThrow(/FATAL: A cryptographically strong SESSION_SECRET/);
+
+        // Valid strong secret in production must succeed
+        process.env.SESSION_SECRET = 'random-strong-secret-value-generated-for-production-min-32-chars';
+        expect(resolveSessionSecret()).toBe('random-strong-secret-value-generated-for-production-min-32-chars');
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+        if (originalSession) process.env.SESSION_SECRET = originalSession; else delete process.env.SESSION_SECRET;
+        if (originalCookie) process.env.COOKIE_SECRET = originalCookie; else delete process.env.COOKIE_SECRET;
+      }
+    });
   });
 });

@@ -46,7 +46,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
 // ── POST /api/tickets/:key/notes ──────────────────────────────
 const AddNoteSchema = z.object({
-  agentId: z.string().min(1),
+  agentId: z.string().optional(),
   content: z.string().min(1),
 });
 
@@ -56,10 +56,17 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     const body = AddNoteSchema.parse(req.body);
     const currentTime = await getCurrentTime();
 
+    if (!req.auth || !req.auth.actorId) {
+      throw new AppError(401, ERROR_CODES.UNAUTHORIZED, 'Authentication required: missing agent session.');
+    }
+    if (body.agentId && body.agentId !== req.auth.actorId) {
+      throw new AppError(403, ERROR_CODES.FORBIDDEN, 'Actor identity mismatch: client-supplied agentId does not match authenticated session.');
+    }
+
     const ticket = await prisma.ticket.findUnique({ where: { ticketKey: key } });
     if (!ticket) throw new AppError(404, ERROR_CODES.NOT_FOUND, `Ticket ${key} not found`);
 
-    const effectiveAgentId = req.auth?.actorId || body.agentId;
+    const effectiveAgentId = req.auth.actorId;
     const agent = await prisma.agent.findUnique({ where: { id: effectiveAgentId } });
     if (!agent) throw new AppError(404, ERROR_CODES.NOT_FOUND, 'Agent not found');
 
