@@ -144,3 +144,42 @@ export function recordFailedLogin(ip: string): void {
 export function clearLoginFailures(ip: string): void {
   rateLimitStore.delete(ip);
 }
+
+/**
+ * Sliding-window rate limiter for demo login requests.
+ * Generous threshold for human evaluator persona switching (30/min),
+ * while preventing automated abuse or resource exhaustion.
+ */
+interface DemoRateLimitRecord {
+  count: number;
+  resetAt: number;
+}
+const demoLoginStore = new Map<string, DemoRateLimitRecord>();
+
+export function isDemoLoginRateLimited(ip: string): { allowed: boolean; remaining: number; retryAfterSec?: number } {
+  if (process.env.NODE_ENV === 'test') {
+    return { allowed: true, remaining: 30 };
+  }
+
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxRequests = 30;
+  const record = demoLoginStore.get(ip);
+
+  if (!record || now > record.resetAt) {
+    demoLoginStore.set(ip, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, remaining: maxRequests - 1 };
+  }
+
+  if (record.count >= maxRequests) {
+    const retryAfterSec = Math.ceil((record.resetAt - now) / 1000);
+    return { allowed: false, remaining: 0, retryAfterSec };
+  }
+
+  record.count += 1;
+  return { allowed: true, remaining: maxRequests - record.count };
+}
+
+export function clearDemoLoginRateLimit(ip: string): void {
+  demoLoginStore.delete(ip);
+}

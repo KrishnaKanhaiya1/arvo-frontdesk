@@ -508,10 +508,14 @@ export const LoginPage: React.FC = () => {
               {/* Evaluator Quick-Access Accounts (1-Click Auto Login) */}
               {authMode === 'signin' && (
                 <div className="mt-4 pt-3 border-t border-[var(--border)]">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)] font-mono mb-2 flex items-center justify-between">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)] font-mono mb-1.5 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <UserCheck className="w-3.5 h-3.5 text-blue-500" /> Demo Accounts · 1-Click Instant Sign-In
                     </span>
+                  </div>
+                  <div className="mb-2 p-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/40 text-[10px] text-blue-800 dark:text-blue-300 leading-snug">
+                    <strong className="font-semibold block mb-0.5">Evaluation Demonstration Environment:</strong>
+                    All demo accounts contain synthetic data. One-click persona access is provided for evaluator convenience and is disabled by default in real production deployments.
                   </div>
 
                   <div className="grid grid-cols-2 gap-1.5">

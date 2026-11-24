@@ -22,6 +22,8 @@ services:
         generateValue: true
       - key: DEMO_PASSWORD
         value: arvo2026
+      - key: ENABLE_DEMO_LOGIN
+        value: "true"
       - key: FRONTEND_URL
         value: https://arvo-frontdesk.vercel.app
 

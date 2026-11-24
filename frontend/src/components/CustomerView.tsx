@@ -15,7 +15,6 @@ import {
   Moon, 
   ArrowLeft,
   CheckCircle2,
-  FileCode2,
   Building2,
   Clock,
   LogOut,
@@ -30,7 +29,6 @@ import { useCustomerTickets, useCustomerTicket, useCustomerReply, useCustomerReo
 import { usePersona } from '../hooks/usePersona';
 import { useTheme } from '../hooks/useTheme';
 import { NewTicketDialog } from './NewTicketDialog';
-import { PersonaSwitcher } from './PersonaSwitcher';
 import {
   getStatusColors,
   getStatusLabel,
@@ -54,27 +52,23 @@ export const CustomerView: React.FC = () => {
     customerInitials, 
     customerColor, 
     role, 
-    setCustomerPersona, 
-    setAgentPersona, 
     logout 
   } = usePersona();
   const { theme, toggleTheme } = useTheme();
 
-  // If currently in an agent role and navigating to customer portal, automatically switch persona
+  // Protect customer portal: route staff users to agent workspace
   React.useEffect(() => {
     if (role && role !== 'customer') {
-      setCustomerPersona();
+      navigate('/tickets');
     }
-  }, [role, setCustomerPersona]);
+  }, [role, navigate]);
 
   // Use the session customerId (empty string falls back gracefully to session-derived customer on server)
   const activeCustomerId = currentCustomerId || '';
 
   const [selectedKey, setSelectedKey] = useState<string | null>(urlTicketKey || null);
   const [replyText, setReplyText] = useState('');
-  const [showPrivacyAudit, setShowPrivacyAudit] = useState(false);
-  const [showRawJsonModal, setShowRawJsonModal] = useState(false);
-  const [showNewTicketModal, setShowNewTicketModal] = useState(false);
+      const [showNewTicketModal, setShowNewTicketModal] = useState(false);
 
   // Linked Follow-up Ticket Dialog state
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
@@ -123,7 +117,6 @@ export const CustomerView: React.FC = () => {
   const handleSelectTicket = (key: string) => {
     setSelectedKey(key);
     navigate(`/customer/tickets/${key}`);
-    setShowPrivacyAudit(false);
   };
 
   const isResolved = ticket?.status === TicketStatus.RESOLVED;
@@ -203,16 +196,6 @@ export const CustomerView: React.FC = () => {
             <span className="hidden sm:inline">New Ticket</span>
           </button>
 
-          {/* Privacy Verification Pill */}
-          <button
-            onClick={() => setShowPrivacyAudit((prev) => !prev)}
-            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer"
-            title="Inspect Data Boundary Isolation"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            <span className="hidden md:inline">Privacy Verification</span>
-          </button>
-
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
@@ -222,8 +205,19 @@ export const CustomerView: React.FC = () => {
             {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
           </button>
 
-          {/* Demo Persona Switcher (For evaluators to test multi-tenancy) */}
-          <PersonaSwitcher />
+          {/* Client Sign Out */}
+          <button
+            type="button"
+            onClick={async () => {
+              await logout();
+              navigate('/login');
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[var(--muted)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/40 border border-[var(--border)] transition-all cursor-pointer shadow-xs whitespace-nowrap"
+            title="Sign out of Client Portal"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sign Out</span>
+          </button>
 
           {/* Customer Avatar */}
           <div
@@ -235,82 +229,6 @@ export const CustomerView: React.FC = () => {
           </div>
         </div>
       </header>
-
-      {/* ── Privacy Verification Summary Banner (When toggled) ── */}
-      {showPrivacyAudit && (
-        <div className="flex-shrink-0 bg-blue-50/90 dark:bg-blue-950/90 border-b border-blue-200 dark:border-blue-800 px-6 py-4 text-xs text-blue-900 dark:text-blue-200 animate-in fade-in duration-150 shadow-sm">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-3">
-            <div className="flex items-start gap-2.5">
-              <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <strong className="block font-bold text-sm text-[var(--content)] font-['Archivo',sans-serif]">
-                  Customer Data Boundary Verified (INC-0304 / Multi-Tenant Isolation)
-                </strong>
-                <p className="text-[11px] text-[var(--muted)] mt-0.5">
-                  Server-enforced multi-tenant isolation ensuring zero internal note or cross-customer data leakage.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 self-end lg:self-auto">
-              <button
-                onClick={() => setShowRawJsonModal(true)}
-                className="px-3 py-1.5 text-xs font-mono font-medium rounded-lg bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-              >
-                <FileCode2 className="w-3.5 h-3.5" /> Inspect Live API Response
-              </button>
-              <button
-                onClick={() => setShowPrivacyAudit(false)}
-                className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-200/50 dark:hover:bg-blue-900/50 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* 4 Explicit Certified Security Checks */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-blue-200/60 dark:border-blue-800/60">
-            <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-300/80 dark:border-emerald-700/80 flex items-start gap-2 shadow-2xs">
-              <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-bold text-[11px] text-[var(--content)]">1. Private Notes Excluded</div>
-                <div className="text-[10px] text-[var(--muted)] leading-tight mt-0.5">
-                  Server route never queries or selects from the internal notes table (<code className="font-mono text-emerald-600 dark:text-emerald-400">hasInternalNotes: false</code>).
-                </div>
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-300/80 dark:border-emerald-700/80 flex items-start gap-2 shadow-2xs">
-              <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-bold text-[11px] text-[var(--content)]">2. Internal Audit Omitted</div>
-                <div className="text-[10px] text-[var(--muted)] leading-tight mt-0.5">
-                  Audit events strictly filtered to customer-facing lifecycle events. Internal triage &amp; assignment changes omitted.
-                </div>
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-300/80 dark:border-emerald-700/80 flex items-start gap-2 shadow-2xs">
-              <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-bold text-[11px] text-[var(--content)]">3. Ownership Verified</div>
-                <div className="text-[10px] text-[var(--muted)] leading-tight mt-0.5">
-                  Derived strictly from signed session (<code className="font-mono text-emerald-600 dark:text-emerald-400">ticket.customerId === session.customerId</code>).
-                </div>
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-300/80 dark:border-emerald-700/80 flex items-start gap-2 shadow-2xs">
-              <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-bold text-[11px] text-[var(--content)]">4. Public History Only</div>
-                <div className="text-[10px] text-[var(--muted)] leading-tight mt-0.5">
-                  Only client messages and specialist public communications are returned in the conversation payload.
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Main Layout ── */}
       <div className="flex flex-1 overflow-hidden">
@@ -665,37 +583,6 @@ export const CustomerView: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Developer / Evaluator Raw JSON Inspection Modal ── */}
-      {showRawJsonModal && ticket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-100">
-          <div 
-            className="w-full max-w-2xl bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl p-6 max-h-[85vh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--border)] mb-3">
-              <div className="flex items-center gap-2">
-                <FileCode2 className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-bold text-[var(--content)] font-mono">
-                  GET /api/customer/tickets/{ticket.ticketKey} JSON Inspection
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowRawJsonModal(false)}
-                className="p-1 rounded text-[var(--muted)] hover:text-[var(--content)] transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-xs text-[var(--muted)] mb-3">
-              Notice: The response schema contains <code className="text-blue-500 font-mono">hasInternalNotes: false</code> and completely omits the <code className="text-blue-500 font-mono">internalNotes</code> table.
-            </p>
-            <div className="flex-1 overflow-y-auto p-3 rounded-xl bg-slate-950 text-slate-200 font-mono text-[11px] slim-scrollbar">
-              <pre>{JSON.stringify(ticket, null, 2)}</pre>
-            </div>
           </div>
         </div>
       )}

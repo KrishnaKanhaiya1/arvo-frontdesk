@@ -3,7 +3,8 @@ import prisma from '../utils/prisma';
 import app from '../index';
 import { installAuditImmutabilityTrigger } from '../../prisma/auditTrigger';
 import { seed } from '../../prisma/seed';
-import { resolveSessionSecret } from '../utils/security';
+import { resolveSessionSecret, isDemoLoginRateLimited } from '../utils/security';
+import { isDemoLoginEnabled } from '../routes/auth';
 import { Server } from 'http';
 
 const BASE_URL = 'http://localhost:3001';
@@ -646,6 +647,46 @@ describe('Ticket Lifecycle: Atomic CAS Reopening & Closed Ticket Protection', ()
         process.env.NODE_ENV = originalEnv;
         if (originalSession) process.env.SESSION_SECRET = originalSession; else delete process.env.SESSION_SECRET;
         if (originalCookie) process.env.COOKIE_SECRET = originalCookie; else delete process.env.COOKIE_SECRET;
+      }
+    });
+
+    it('demo login architecture: ENABLE_DEMO_LOGIN gating and rate limiting', async () => {
+      const origNodeEnv = process.env.NODE_ENV;
+      const origDemoFlag = process.env.ENABLE_DEMO_LOGIN;
+
+      try {
+        // 1. In production without ENABLE_DEMO_LOGIN flag, demo login is disabled
+        process.env.NODE_ENV = 'production';
+        delete process.env.ENABLE_DEMO_LOGIN;
+        expect(isDemoLoginEnabled()).toBe(false);
+
+        // 2. In production with explicit ENABLE_DEMO_LOGIN="true", it is enabled
+        process.env.ENABLE_DEMO_LOGIN = 'true';
+        expect(isDemoLoginEnabled()).toBe(true);
+
+        // 3. With explicit ENABLE_DEMO_LOGIN="false", it is disabled
+        process.env.ENABLE_DEMO_LOGIN = 'false';
+        expect(isDemoLoginEnabled()).toBe(false);
+
+        // 4. Rate limiting verification
+        const ip = '192.0.2.42';
+        const rateCheck = isDemoLoginRateLimited(ip);
+        expect(rateCheck.allowed).toBe(true);
+
+        // 5. Unauthorized demo persona is rejected with 403
+        process.env.NODE_ENV = 'development';
+        delete process.env.ENABLE_DEMO_LOGIN;
+
+        const fakeRes = await fetch(`${BASE_URL}/api/auth/demo-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ personaId: 'agent-hacker-malicious' }),
+        });
+        expect(fakeRes.status).toBe(403);
+      } finally {
+        process.env.NODE_ENV = origNodeEnv;
+        if (origDemoFlag !== undefined) process.env.ENABLE_DEMO_LOGIN = origDemoFlag;
+        else delete process.env.ENABLE_DEMO_LOGIN;
       }
     });
   });

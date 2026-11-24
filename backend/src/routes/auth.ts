@@ -3,11 +3,28 @@ import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { ERROR_CODES } from '../types/contracts';
-import { signCookie, verifySignedCookie, isRateLimited, recordFailedLogin, clearLoginFailures, DEMO_PASSWORD, hashPassword, verifyPassword } from '../utils/security';
+import { signCookie, verifySignedCookie, isRateLimited, isDemoLoginRateLimited, recordFailedLogin, clearLoginFailures, DEMO_PASSWORD, hashPassword, verifyPassword } from '../utils/security';
 
 const router = Router();
 
 export const COOKIE_NAME = 'arvo_session';
+
+/**
+ * Check if Demo Login is enabled.
+ * In a real production deployment, demo login is disabled by default unless
+ * explicitly enabled via ENABLE_DEMO_LOGIN="true".
+ * In development/test environments, it defaults to enabled unless explicitly set to "false".
+ */
+export const isDemoLoginEnabled = (): boolean => {
+  if (process.env.ENABLE_DEMO_LOGIN !== undefined) {
+    return process.env.ENABLE_DEMO_LOGIN.toLowerCase() === 'true';
+  }
+  // Disabled by default in production
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+  return true;
+};
 
 const getCookieOptions = (): CookieOptions => ({
   httpOnly: true,
@@ -54,6 +71,15 @@ const ALLOWED_DEMO_IDS = new Set([
  */
 router.get('/demo-personas', async (_req: Request, res: Response, next: NextFunction) => {
   try {
+    if (!isDemoLoginEnabled()) {
+      return res.json({
+        success: true,
+        enabled: false,
+        data: [],
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     const [agents, customers] = await Promise.all([
       prisma.agent.findMany({
         where: { id: { in: ['agent-meera', 'agent-rahul', 'agent-priya'] } },
@@ -198,10 +224,30 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
 /**
  * POST /api/auth/demo-login
  * Issues a session cookie for pre-provisioned demo personas.
- * Exempt from rate-limiting for smooth evaluator switching.
+ * Disabled by default in production; enabled via ENABLE_DEMO_LOGIN="true".
+ * Protected with sliding-window rate limiting (30 requests/min).
  */
 router.post('/demo-login', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (!isDemoLoginEnabled()) {
+      throw new AppError(
+        403,
+        ERROR_CODES.FORBIDDEN || 'FORBIDDEN',
+        'Demo authentication is disabled in this environment. Please authenticate using real credentials.'
+      );
+    }
+
+    const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const rateCheck = isDemoLoginRateLimited(clientIp);
+    if (!rateCheck.allowed) {
+      res.setHeader('Retry-After', String(rateCheck.retryAfterSec || 60));
+      throw new AppError(
+        429,
+        ERROR_CODES.RATE_LIMITED || 'TOO_MANY_REQUESTS',
+        `Too many demo login attempts. Please wait ${rateCheck.retryAfterSec || 60} seconds before retrying.`
+      );
+    }
+
     const { personaId } = DemoLoginSchema.parse(req.body);
 
     if (!ALLOWED_DEMO_IDS.has(personaId)) {
